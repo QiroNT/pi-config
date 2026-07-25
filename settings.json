@@ -1,0 +1,14 @@
+{
+  "lastChangelogVersion": "0.82.1",
+  "theme": "dark",
+  "npmCommand": [
+    "pnpm"
+  ],
+  "packages": [
+    "npm:pi-web-access",
+    "npm:@tintinweb/pi-subagents"
+  ],
+  "defaultProvider": "openai-codex",
+  "defaultModel": "gpt-5.6-sol",
+  "enableInstallTelemetry": false
+}
