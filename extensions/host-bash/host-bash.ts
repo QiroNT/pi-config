@@ -1,4 +1,5 @@
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { fileURLToPath } from "node:url";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { createBashToolDefinition } from "@earendil-works/pi-coding-agent";
 
 const VM_COMMAND_NOT_FOUND = /(?:command not found|Command exited with code 127)/i;
@@ -11,9 +12,38 @@ const HOST_BASH_HINT =
  */
 export default function (pi: ExtensionAPI) {
 	const hostCwd = process.cwd();
+	const commaPicker = fileURLToPath(new URL("./bin/comma-picker", import.meta.url));
+
+	// Pi's modal UI supports only one prompt at a time. Tool calls may execute
+	// concurrently, so queue approval prompts while allowing approved commands
+	// to continue running in parallel.
+	let approvalQueue: Promise<void> = Promise.resolve();
+	const requestApproval = (command: string, signal: AbortSignal, ctx: ExtensionContext) => {
+		const approval = approvalQueue.then(async () => {
+			if (signal.aborted) throw signal.reason ?? new Error("Host command cancelled");
+			return ctx.ui.confirm(
+				"Run command outside the VM?",
+				[`Host working directory: ${hostCwd}`, "", command].join("\n"),
+				{ signal },
+			);
+		});
+		approvalQueue = approval.then(
+			() => undefined,
+			() => undefined,
+		);
+		return approval;
+	};
+
 	// Use the definition rather than the SDK-wrapped tool so host_bash keeps
 	// bash's renderCall/renderResult, including collapsed output previews.
-	const hostBash = createBashToolDefinition(hostCwd);
+	const hostBash = createBashToolDefinition(hostCwd, {
+		spawnHook(context) {
+			return {
+				...context,
+				env: { ...context.env, COMMA_PICKER: commaPicker },
+			};
+		},
+	});
 
 	pi.registerTool({
 		...hostBash,
@@ -31,11 +61,7 @@ export default function (pi: ExtensionAPI) {
 				throw new Error("Host command denied: interactive user approval is unavailable");
 			}
 
-			const approved = await ctx.ui.confirm(
-				"Run command outside the VM?",
-				[`Host working directory: ${hostCwd}`, "", params.command].join("\n"),
-				{ signal },
-			);
+			const approved = await requestApproval(params.command, signal, ctx);
 			if (!approved) throw new Error("Host command denied by user");
 
 			return hostBash.execute(id, params, signal, onUpdate, ctx);

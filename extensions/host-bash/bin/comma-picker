@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# Non-interactive COMMA_PICKER for host_bash. Comma passes candidates on stdin
+# and expects the selected candidate on stdout.
+set -uo pipefail
+
+mapfile -t candidates
+((${#candidates[@]})) || exit 1
+
+# Comma itself does not pass the requested executable to its picker. Recover it
+# from the parent process argv on Linux so package names can be ranked sensibly.
+command_name=""
+if [[ -r /proc/$PPID/cmdline ]]; then
+	mapfile -d '' -t parent_argv </proc/$PPID/cmdline || true
+	skip_value=false
+	for ((i = 1; i < ${#parent_argv[@]}; i++)); do
+		arg=${parent_argv[i]}
+		if $skip_value; then
+			skip_value=false
+			continue
+		fi
+		case "$arg" in
+			-P|--picker|-F|--nixpkgs-flake|--cache-level) skip_value=true ;;
+			--picker=*|--nixpkgs-flake=*|--cache-level=*|-*) ;;
+			*) command_name=${arg##*/}; break ;;
+		esac
+	done
+fi
+
+# Common executable names whose canonical nixpkgs attribute is not a substring.
+declare -A canonical=(
+	[rg]=ripgrep [fd]=fd [tsc]=typescript [npx]=nodejs [npm]=nodejs
+	[sed]=gnused [awk]=gawk [grep]=gnugrep [make]=gnumake [patch]=gnupatch
+	[tar]=gnutar [xargs]=findutils [locate]=findutils [updatedb]=findutils
+)
+
+best=""
+best_score=2147483647
+for candidate in "${candidates[@]}"; do
+	package=${candidate%.out}
+	package=${package##*.}
+	score=1000
+
+	if [[ -n "$command_name" ]]; then
+		if [[ "$package" == "$command_name" ]]; then
+			score=0
+		elif [[ -n ${canonical[$command_name]:-} && "$package" == "${canonical[$command_name]}" ]]; then
+			score=10
+		elif [[ "$package" == *"$command_name"* ]]; then
+			score=100
+		elif [[ "$command_name" == *"$package"* ]]; then
+			score=150
+		fi
+	fi
+
+	# Prefer top-level, normal outputs over bootstrap/static variants, then use
+	# the shortest attribute as a stable tie-breaker.
+	[[ "$candidate" == *.*.* ]] && ((score += 100))
+	[[ "$candidate" =~ (bootstrap|static|musl|latest) ]] && ((score += 500))
+	((score += ${#candidate}))
+
+	if ((score < best_score)) || { ((score == best_score)) && [[ "$candidate" < "$best" ]]; }; then
+		best=$candidate
+		best_score=$score
+	fi
+done
+
+printf '%s\n' "$best"
