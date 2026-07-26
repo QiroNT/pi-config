@@ -29,7 +29,10 @@ import {
 	RealFSProvider,
 	ReadonlyProvider,
 	resolveImageSelector,
+	ShadowProvider,
+	createShadowPathPredicate,
 	setImageRef,
+	type VirtualProvider,
 	VM,
 } from "@earendil-works/gondolin";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
@@ -58,6 +61,7 @@ import {
 const GUEST_WORKSPACE = "/workspace";
 const GITHUB_REPOS_DIR = "/tmp/pi-github-repos";
 const HOST_PI_AGENT_DIR = path.join(process.env.HOME ?? "", ".pi", "agent");
+const HOST_PI_CREDENTIAL_PATHS = [path.join(HOST_PI_AGENT_DIR, "auth.json")];
 const OCI_IMAGE = "ghcr.io/catthehacker/ubuntu:custom-latest";
 const GONDOLIN_IMAGE = process.env.GONDOLIN_IMAGE ?? OCI_IMAGE;
 const DEFAULT_GREP_LIMIT = 100;
@@ -78,6 +82,17 @@ function toPosix(value: string): string {
 function isInsideHostPath(root: string, value: string): boolean {
 	const relativePath = path.relative(root, value);
 	return relativePath === "" || (!relativePath.startsWith("..") && !path.isAbsolute(relativePath));
+}
+
+function protectPiCredentials(provider: VirtualProvider, hostRoot: string): VirtualProvider {
+	const shadowPaths = HOST_PI_CREDENTIAL_PATHS.filter((credentialPath) =>
+		isInsideHostPath(hostRoot, credentialPath),
+	).map((credentialPath) => `/${toPosix(path.relative(hostRoot, credentialPath))}`);
+	if (shadowPaths.length === 0) return provider;
+	return new ShadowProvider(provider, {
+		shouldShadow: createShadowPathPredicate(shadowPaths),
+		writeMode: "deny",
+	});
 }
 
 function hostPathToGuest(localCwd: string, hostPath: string): string {
@@ -509,7 +524,10 @@ export default function (pi: ExtensionAPI) {
 		const mounts = {
 			[GUEST_WORKSPACE]: new RealFSProvider(localCwd),
 			[GITHUB_REPOS_DIR]: new RealFSProvider(GITHUB_REPOS_DIR),
-			[HOST_PI_AGENT_DIR]: new ReadonlyProvider(new RealFSProvider(HOST_PI_AGENT_DIR)),
+			[HOST_PI_AGENT_DIR]: protectPiCredentials(
+				new ReadonlyProvider(new RealFSProvider(HOST_PI_AGENT_DIR)),
+				HOST_PI_AGENT_DIR,
+			),
 		};
 		const created = await VM.create({
 			sessionLabel: `pi ${path.basename(localCwd)}`,
