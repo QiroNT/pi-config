@@ -1,37 +1,85 @@
 ---
 name: pnpm-patch
-description: "Create or update pnpm dependency patches for the current workspace. Use when changing installed package runtime behavior with pnpm patch."
+description: "Create or update a pnpm patch that changes behavior of an dependency in the current workspace. Use when encoutering an issue in a dependency."
 ---
 
 # pnpm patch
 
-Patch the dependency used by the current workspace. Optimize only for this workspace and its concrete problem; do not add compatibility layers, reusable interfaces, or speculative maintenance work.
+Patch an installed dependency to fix problems in the current workspace.
 
-## Constraints
+## Diverge at the smallest stable interface
 
-- Run `pnpm install`, `pnpm patch`, and `pnpm patch-commit` on the host with `host_bash`. They usually do not work correctly in the VM.
-- Give `pnpm patch` an edit directory inside the current workspace so the extracted package is visible in the VM. Use a disposable directory such as `.pnpm-patch-<package>`.
-- Edit only shipped runtime files, normally `dist/`, `lib/`, `build/`, or the exact files referenced by the package's `exports`, `main`, or `bin` fields. Do not edit `src/`, tests, documentation, source maps, or type declarations unless one of them is itself the runtime artifact that must change.
-- Do not run the dependency's formatter, linter, build, or test suite. Its development environment is not present, and rebuilding can overwrite the runtime-only edit.
-- Do not manually copy package code or create a replacement implementation. Keep the patch as a small change to the existing execution path. Duplicated code can diverge when the dependency changes.
+The goal is to make the patched dependency diverge in the smallest possible unit of code.
 
-## Workflow
+Measure this by the behavior the patch takes ownership of, not by line count.
 
-1. Identify the exact installed package version and the runtime file that executes. Inspect the dependency's `package.json`, entry points, and call path rather than assuming its source layout.
-2. Before editing, state the smallest behavioral change that solves the workspace's concrete problem. Prefer changing an argument, path, condition, or existing call site over adding a wrapper, helper, duplicate implementation, or generalized abstraction.
-3. From the workspace root on the host, extract the package into a workspace-relative directory:
+Bad — replaces the function's execution path:
 
-   ```bash
-   pnpm patch <package>@<exact-version> --edit-dir <workspace>/.pnpm-patch-<package>
-   ```
+```js
+  function tool(options) {
++   if (options.router) return options.router.tool(options);
+    // existing implementation
+  }
+```
 
-   If dependencies must first be installed, run `pnpm install` on the host.
-4. In the VM, inspect and edit the corresponding directory under the mounted workspace (commonly `/workspace/.pnpm-patch-<package>`).
-5. Commit the extracted directory on the host following the command prompted in the result of `pnpm patch`.
-6. Inspect the resulting patch file and the workspace manifest or lockfile changes. Verify the patch contains only the minimal edit and that the workspace references it.
-7. Validate through the current workspace's relevant behavior or a focused invocation. Do not lint, format, build, or broadly test the patched dependency.
-8. After the patch is committed and verified, remove the disposable `.pnpm-patch-<package>` directory.
+Better — changes only the operation that must behave differently:
 
-## Editing principle
+```js
+- child = spawn(binary, ...);
++ child = (options.router?.spawn ?? spawn)(binary, ...);
+```
 
-Change the existing code at the point where behavior must differ. For example, when a dependency launches a helper with the wrong environment, path, or arguments, alter that existing launch call. Do not add another copy of the launcher or reimplement the surrounding tool. Every added line should be necessary for this workspace's current behavior.
+Prefer changing existing argument, condition, callback, or call site.
+
+When changing a call site, prefer changing a stable interface, like the case with `spawn`. Implement the compatibility logic outside the dependency if the interface can't be provided directly.
+
+Do not copy or reimplement the surrounding function, module, or tool. Copies diverge from future dependency changes even when the patch itself is textually small.
+
+The patch has exactly one consumer — this workspace — and is never upstreamed. Do not add compatibility layers, reusable interfaces, or speculative maintenance work.
+
+## Find where the behavior is decided
+
+Treat the package named by the user as a starting hypothesis.
+
+Trace the path until you find the narrowest point where the unwanted behavior becomes fixed. This may be inside a different installed package.
+
+Use evidence from:
+
+- runtime call flow or stack
+- logs around when the issue occurred
+- imports and package entry points
+- helper-process paths
+- generated or transformed output
+
+Before editing, identify:
+
+1. The exact installed package and version.
+2. The shipped file that executes during the workspace's usage.
+3. The existing expression or call where the behavior is decided.
+4. The smallest change at that point.
+
+Inspect `package.json`, including `exports`, `main`, `module`, and `bin`. Do not assume the relevant code is in `src/` or in the package's original structure.
+
+## Extract and edit
+
+Run pnpm state-changing commands using `host_bash`:
+
+```bash
+pnpm patch <package>@<exact-version> --edit-dir <workspace>/.pnpm-patch-<package>
+```
+
+The edit directory must be inside the workspace so it is visible in the VM. Edit the extracted package there. When finished, run the `pnpm patch-commit` command printed by `pnpm patch` on the host.
+
+Edit only shipped files that the workspace executes, normally under `dist/`, `lib/`, or `build/`, or files referenced by the package entry points. When the workspace uses multiple equivalent shipped variants, apply the same minimal edit to each relevant variant.
+
+Do not edit source files, tests, documentation, source maps, or declarations unless they are themselves executed artifacts.
+
+Do not run the dependency's formatter, linter, build, or test suite. Its development environment is not present, and rebuilding can overwrite the shipped-file edit.
+
+## Verify
+
+After committing the patch:
+
+1. Inspect the generated patch and confirm it contains only the intended edit.
+2. Validate through the smallest representative workspace invocation.
+3. Remove the disposable `.pnpm-patch-<package>` directory.

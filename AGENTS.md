@@ -4,7 +4,7 @@
 
 Useful commands: `rg fd fzf ast-grep jq yq bat tmux direnv shellcheck shfmt sqlite3 rsync nc socat dig hyperfine gh`
 
-## Output
+## Reply
 
 Before sending, delete:
 
