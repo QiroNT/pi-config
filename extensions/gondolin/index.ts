@@ -27,6 +27,7 @@ import {
 	getDefaultArch,
 	importImageFromDirectory,
 	RealFSProvider,
+	ReadonlyProvider,
 	resolveImageSelector,
 	setImageRef,
 	VM,
@@ -56,6 +57,7 @@ import {
 
 const GUEST_WORKSPACE = "/workspace";
 const GITHUB_REPOS_DIR = "/tmp/pi-github-repos";
+const HOST_PI_AGENT_DIR = path.join(process.env.HOME ?? "", ".pi", "agent");
 const OCI_IMAGE = "ghcr.io/catthehacker/ubuntu:custom-latest";
 const GONDOLIN_IMAGE = process.env.GONDOLIN_IMAGE ?? OCI_IMAGE;
 const DEFAULT_GREP_LIMIT = 100;
@@ -504,15 +506,15 @@ export default function (pi: ExtensionAPI) {
 		// pi-web-access clones GitHub repositories on the host. Mount that cache at
 		// the same path so librarian can inspect fetch_content clones in the VM.
 		fs.mkdirSync(GITHUB_REPOS_DIR, { recursive: true });
+		const mounts = {
+			[GUEST_WORKSPACE]: new RealFSProvider(localCwd),
+			[GITHUB_REPOS_DIR]: new RealFSProvider(GITHUB_REPOS_DIR),
+			[HOST_PI_AGENT_DIR]: new ReadonlyProvider(new RealFSProvider(HOST_PI_AGENT_DIR)),
+		};
 		const created = await VM.create({
 			sessionLabel: `pi ${path.basename(localCwd)}`,
 			sandbox: { imagePath: GONDOLIN_IMAGE },
-			vfs: {
-				mounts: {
-					[GUEST_WORKSPACE]: new RealFSProvider(localCwd),
-					[GITHUB_REPOS_DIR]: new RealFSProvider(GITHUB_REPOS_DIR),
-				},
-			},
+			vfs: { mounts },
 		});
 		const environmentProbe = await created.exec(["/usr/bin/env"]);
 		guestBaseEnv = parseEnvironment(environmentProbe.stdout);
@@ -565,6 +567,7 @@ export default function (pi: ExtensionAPI) {
 					`Guest workspace: ${GUEST_WORKSPACE}`,
 					`Image: ${GONDOLIN_IMAGE}`,
 					`GitHub clone cache: ${GITHUB_REPOS_DIR}`,
+					`Pi agent directory (read-only): ${HOST_PI_AGENT_DIR}`,
 					`Shell: ${shellPath}`,
 				].join("\n"),
 				"info",
