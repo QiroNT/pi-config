@@ -22,7 +22,7 @@ Example:
 
 ## Command
 
-This Pi installation runs normal shell tools inside Gondolin, whose network proxy blocks Git's HTTPS POST requests. Run the checkout helper on the host with the `host_bash` tool:
+Run the checkout helper on the host with the `host_bash` tool:
 
 ```bash
 bash ~/.pi/agent/skills/librarian/checkout.sh <repo> --path-only
@@ -36,14 +36,14 @@ bash ~/.pi/agent/skills/librarian/checkout.sh github.com/mitsuhiko/minijinja --p
 bash ~/.pi/agent/skills/librarian/checkout.sh https://github.com/mitsuhiko/minijinja --path-only
 ```
 
-The host's `~/.cache/checkouts` is mounted at the VM user's `~/.cache/checkouts`. Use the VM path with `read`, `bash`, `grep`, and other VM tools. Do not run the helper with the VM `bash` tool.
-
 The script will:
 1. Parse the repo reference into host/org/repo.
 2. Clone if missing.
 3. Reuse existing checkout if present.
 4. Fetch from `origin` when stale (default interval: 300s).
 5. Attempt a fast-forward merge if the checkout is clean and has an upstream.
+
+The host's `~/.cache/checkouts` is mounted at the VM user's `~/.cache/checkouts`. Use the VM path with `read`, `bash`, `grep`, and other VM tools.
 
 ## Update strategy
 
