@@ -1,0 +1,98 @@
+diff --git a/dist/tools/exec/bridge-client.js b/dist/tools/exec/bridge-client.js
+index a475356ea04ff2b7e7645b503eb9996e6f071b67..fbc53429d73c256af5e25dd710eb491671105447 100644
+--- a/dist/tools/exec/bridge-client.js
++++ b/dist/tools/exec/bridge-client.js
+@@ -75,7 +75,7 @@ export function createExecBridgeClient() {
+         bridgeStderr = "";
+         bridgeStdoutDecoder = new StringDecoder("utf8");
+         bridgeStderrDecoder = new StringDecoder("utf8");
+-        bridge = spawn(binary, [], { stdio: "pipe", env: process.env });
++        bridge = (globalThis[Symbol.for("@howaboua/pi-codex-conversion.exec-router")]?.spawn ?? spawn)(binary, [], { stdio: "pipe", env: process.env });
+         bridge.stdout.on("data", handleStdout);
+         bridge.stderr.on("data", (data) => {
+             bridgeStderr = appendBoundedText(bridgeStderr, bridgeStderrDecoder.write(data));
+@@ -100,7 +100,8 @@ export function createExecBridgeClient() {
+             const child = getBridge();
+             const response = await new Promise((resolve, reject) => {
+                 pendingBridgeRequests.set(requestId, { resolve: resolve, reject });
+-                child.stdin.write(`${JSON.stringify({ ...request, request_id: requestId })}\n`, (error) => {
++                const routedRequest = globalThis[Symbol.for("@howaboua/pi-codex-conversion.exec-router")]?.prepareExecBridgeRequest?.(request) ?? request;
++                child.stdin.write(`${JSON.stringify({ ...routedRequest, request_id: requestId })}\n`, (error) => {
+                     if (!error)
+                         return;
+                     pendingBridgeRequests.delete(requestId);
+diff --git a/dist/tools/path/runner.js b/dist/tools/path/runner.js
+index c5882c6ab354bf1b08c131a8aebf9df47260a72e..87d223387cfe41077f64eb96c4931b6aa1c14fdc 100644
+--- a/dist/tools/path/runner.js
++++ b/dist/tools/path/runner.js
+@@ -12,7 +12,7 @@ export function runBundledTool({ binary, args, stdin, cwd, env, maxBuffer, signa
+         let stderr = "";
+         let outputBytes = 0;
+         let settled = false;
+-        const child = spawn(binary, args, {
++        const child = (globalThis[Symbol.for("@howaboua/pi-codex-conversion.exec-router")]?.spawn ?? spawn)(binary, args, {
+             cwd,
+             env: env ?? process.env,
+             stdio: [stdin === undefined ? "ignore" : "pipe", "pipe", "pipe"],
+diff --git a/dist/tools/web-run/tool.js b/dist/tools/web-run/tool.js
+index b9ab3c7a5c338ff7b0cc72a5eeab60e8720ebcc2..8f65f03b151e599be915413ef1ff2800599b377f 100644
+--- a/dist/tools/web-run/tool.js
++++ b/dist/tools/web-run/tool.js
+@@ -62,7 +62,7 @@ export function webRunSessionStatePath(ctx) {
+ }
+ async function runWebRunBinary(webRunPath, params, env, signal) {
+     return new Promise((resolve, reject) => {
+-        const child = spawn(webRunPath, ["-"], { env, signal: signal ?? undefined, stdio: ["pipe", "pipe", "pipe"] });
++        const child = (globalThis[Symbol.for("@howaboua/pi-codex-conversion.exec-router")]?.spawn ?? spawn)(webRunPath, ["-"], { env, signal: signal ?? undefined, stdio: ["pipe", "pipe", "pipe"] });
+         let stdout = "";
+         let stderr = "";
+         child.stdout.setEncoding("utf8");
+diff --git a/src/tools/exec/bridge-client.ts b/src/tools/exec/bridge-client.ts
+index 6ec3e5f93808ade44774041f5be051a32030f25a..da72ee8f6be2b8c51bc9c2e96e169a7ce20405e4 100644
+--- a/src/tools/exec/bridge-client.ts
++++ b/src/tools/exec/bridge-client.ts
+@@ -94,7 +94,7 @@ export function createExecBridgeClient(): ExecBridgeClient {
+ 		bridgeStderr = "";
+ 		bridgeStdoutDecoder = new StringDecoder("utf8");
+ 		bridgeStderrDecoder = new StringDecoder("utf8");
+-		bridge = spawn(binary, [], { stdio: "pipe", env: process.env });
++		bridge = ((globalThis as any)[Symbol.for("@howaboua/pi-codex-conversion.exec-router")]?.spawn ?? spawn)(binary, [], { stdio: "pipe", env: process.env });
+ 		bridge.stdout.on("data", handleStdout);
+ 		bridge.stderr.on("data", (data: Buffer) => {
+ 			bridgeStderr = appendBoundedText(bridgeStderr, bridgeStderrDecoder.write(data));
+@@ -120,7 +120,8 @@ export function createExecBridgeClient(): ExecBridgeClient {
+ 			const child = getBridge();
+ 			const response = await new Promise<BridgeResponse<T>>((resolve, reject) => {
+ 				pendingBridgeRequests.set(requestId, { resolve: resolve as (value: BridgeResponse) => void, reject });
+-				child.stdin.write(`${JSON.stringify({ ...request, request_id: requestId })}\n`, (error) => {
++				const routedRequest = (globalThis as any)[Symbol.for("@howaboua/pi-codex-conversion.exec-router")]?.prepareExecBridgeRequest?.(request) ?? request;
++				child.stdin.write(`${JSON.stringify({ ...routedRequest, request_id: requestId })}\n`, (error) => {
+ 					if (!error) return;
+ 					pendingBridgeRequests.delete(requestId);
+ 					reject(new Error(formatExecBridgeWriteError(error, bridgeStderr)));
+diff --git a/src/tools/path/runner.ts b/src/tools/path/runner.ts
+index fdf8a3d4cc7cada9520c11b11262c594aaeab281..1d76d262152bf717c4e0d326c7d8d4fa859d9d63 100644
+--- a/src/tools/path/runner.ts
++++ b/src/tools/path/runner.ts
+@@ -32,7 +32,7 @@ export function runBundledTool({ binary, args, stdin, cwd, env, maxBuffer, signa
+ 		let stderr = "";
+ 		let outputBytes = 0;
+ 		let settled = false;
+-		const child = spawn(binary, args, {
++		const child = ((globalThis as any)[Symbol.for("@howaboua/pi-codex-conversion.exec-router")]?.spawn ?? spawn)(binary, args, {
+ 			cwd,
+ 			env: env ?? process.env,
+ 			stdio: [stdin === undefined ? "ignore" : "pipe", "pipe", "pipe"],
+diff --git a/src/tools/web-run/tool.ts b/src/tools/web-run/tool.ts
+index aa297dc27003ae40fe80bfe4f3007f555f7307c4..314c8f2d41606df85341143db3e3cb6b99800594 100644
+--- a/src/tools/web-run/tool.ts
++++ b/src/tools/web-run/tool.ts
+@@ -82,7 +82,7 @@ export function webRunSessionStatePath(ctx: ExtensionContext): string | undefine
+ 
+ async function runWebRunBinary(webRunPath: string, params: Record<string, unknown>, env: NodeJS.ProcessEnv, signal: AbortSignal | undefined | null): Promise<string> {
+ 	return new Promise((resolve, reject) => {
+-		const child = spawn(webRunPath, ["-"], { env, signal: signal ?? undefined, stdio: ["pipe", "pipe", "pipe"] });
++		const child = ((globalThis as any)[Symbol.for("@howaboua/pi-codex-conversion.exec-router")]?.spawn ?? spawn)(webRunPath, ["-"], { env, signal: signal ?? undefined, stdio: ["pipe", "pipe", "pipe"] });
+ 		let stdout = "";
+ 		let stderr = "";
+ 		child.stdout.setEncoding("utf8");

@@ -20,8 +20,10 @@
  *   - QEMU installed (for example, `brew install qemu` on macOS)
  */
 
+import { EventEmitter } from "node:events";
 import fs from "node:fs";
 import path from "node:path";
+import { Writable } from "node:stream";
 import { fileURLToPath } from "node:url";
 import {
 	buildAssets,
@@ -69,7 +71,7 @@ const OCI_IMAGE = "pi-gondolin-rootfs:latest";
 const DEFAULT_IMAGE = "pi-gondolin:latest";
 const GONDOLIN_IMAGE = process.env.GONDOLIN_IMAGE ?? DEFAULT_IMAGE;
 const DEFAULT_GREP_LIMIT = 100;
-
+const CODEX_EXEC_ROUTER = Symbol.for("@howaboua/pi-codex-conversion.exec-router");
 type TextToolResult<TDetails> = {
 	content: Array<{ type: "text"; text: string }>;
 	details: TDetails | undefined;
@@ -571,11 +573,80 @@ export default function (pi: ExtensionAPI) {
 		return vmStarting;
 	}
 
+	const codexRouter = {
+		spawn(command: string, args: string[], options: {
+			cwd?: string;
+			env?: NodeJS.ProcessEnv;
+			signal?: AbortSignal | null;
+			stdio?: string | string[];
+		} = {}) {
+			if (!vm) throw new Error("Gondolin VM is not ready");
+			const controller = new AbortController();
+			const signal = options.signal
+				? AbortSignal.any([options.signal, controller.signal])
+				: controller.signal;
+			const pipeStdin = options.stdio === "pipe" || Array.isArray(options.stdio) && options.stdio[0] === "pipe";
+			const process = vm.exec([command, ...args], {
+				cwd: toGuestPath(localCwd, options.cwd ?? localCwd),
+				env: path.basename(command) === "exec_bridge"
+					? { ...guestBaseEnv }
+					: createGuestEnv(options.env, guestBaseEnv),
+				stdin: pipeStdin,
+				signal,
+				stdout: "pipe",
+				stderr: "pipe",
+			});
+			const child = new EventEmitter() as any;
+			child.stdout = process.stdout;
+			child.stderr = process.stderr;
+			child.stdin = new Writable({
+				write(chunk, _encoding, done) {
+					try { process.write(chunk); done(); } catch (error) { done(error as Error); }
+				},
+				final(done) {
+					process.end();
+					done();
+				},
+			});
+			child.killed = false;
+			child.kill = () => {
+				child.killed = true;
+				controller.abort();
+				return true;
+			};
+			void process.then(
+				(result) => child.emit("close", result.exitCode, null),
+				(error) => child.emit("error", error),
+			);
+			return child;
+		},
+		prepareExecBridgeRequest(request: Record<string, unknown>) {
+			if (request.op !== "exec") return request;
+
+			// Fix env.SHELL in getCodexRuntimeShell.
+			const argv = Array.isArray(request.argv) ? request.argv.map(String) : [];
+			if (path.isAbsolute(argv[0] ?? "") && !argv[0]!.startsWith("/bin/") && !argv[0]!.startsWith("/usr/bin/")) {
+				argv.splice(0, 1, "/usr/bin/env", path.basename(argv[0]!));
+			}
+
+			return {
+				...request,
+				argv,
+				cwd: toGuestPath(localCwd, String(request.cwd ?? localCwd)),
+				env: { ...guestBaseEnv },
+			};
+		},
+	};
+	(globalThis as Record<PropertyKey, unknown>)[CODEX_EXEC_ROUTER] = codexRouter;
+
 	pi.on("session_start", async (_event, ctx) => {
 		await ensureVm(ctx);
 	});
 
 	pi.on("session_shutdown", async (_event, ctx) => {
+		if ((globalThis as Record<PropertyKey, unknown>)[CODEX_EXEC_ROUTER] === codexRouter) {
+			delete (globalThis as Record<PropertyKey, unknown>)[CODEX_EXEC_ROUTER];
+		}
 		const activeVm = vm;
 		vm = undefined;
 		vmStarting = undefined;
