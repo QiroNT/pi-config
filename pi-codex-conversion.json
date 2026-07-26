@@ -1,0 +1,52 @@
+{
+  "mode": "normal",
+  "voiceFeaturesOnly": false,
+  "scope": {
+    "allProviders": "off",
+    "additionalProviders": []
+  },
+  "tools": {
+    "webRun": true,
+    "imageGeneration": true,
+    "viewImageFallback": false,
+    "applyPatchOnly": false,
+    "viewImageOnly": false,
+    "webRunOnly": false,
+    "imageGenerationOnly": false
+  },
+  "ui": {
+    "statusLine": true,
+    "toolRenaming": true,
+    "compactTools": false,
+    "codeModeDetails": false,
+    "backgroundShellWidget": true,
+    "backgroundShellToggleShortcut": "alt+w",
+    "backgroundShellPrevShortcut": "alt+q",
+    "backgroundShellNextShortcut": "alt+e",
+    "backgroundShellCloseShortcut": "alt+r"
+  },
+  "compaction": {
+    "responsesCompaction": false,
+    "version": "v1"
+  },
+  "beta": {
+    "codeMode": false,
+    "responsesLite": false,
+    "v2UserMessageRetention": 64
+  },
+  "voice": {
+    "protocol": "v3",
+    "mode": "conversational",
+    "v2Voice": "marin",
+    "v3Voice": "cove",
+    "dictationShortcut": "ctrl+alt+d",
+    "realtimeShortcut": "ctrl+alt+space",
+    "dictationShortcutMode": "push"
+  },
+  "openai": {
+    "fast": false,
+    "verbosity": "low",
+    "forceCachedWebSockets": true,
+    "webSearchModel": "gpt-5.6-luna"
+  }
+}
