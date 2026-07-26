@@ -14,18 +14,33 @@ export default function (pi: ExtensionAPI) {
 	const hostCwd = process.cwd();
 	const commaPicker = fileURLToPath(new URL("./bin/comma-picker", import.meta.url));
 
+	type ApprovalResult =
+		| { action: "approve" }
+		| { action: "deny" }
+		| { action: "feedback"; feedback: string };
+
 	// Pi's modal UI supports only one prompt at a time. Tool calls may execute
 	// concurrently, so queue approval prompts while allowing approved commands
 	// to continue running in parallel.
 	let approvalQueue: Promise<void> = Promise.resolve();
 	const requestApproval = (command: string, signal: AbortSignal, ctx: ExtensionContext) => {
-		const approval = approvalQueue.then(async () => {
+		const approval = approvalQueue.then(async (): Promise<ApprovalResult> => {
 			if (signal.aborted) throw signal.reason ?? new Error("Host command cancelled");
-			return ctx.ui.confirm(
-				"Run command outside the VM?",
-				[`Host working directory: ${hostCwd}`, "", command].join("\n"),
+			const choice = await ctx.ui.select(
+				["Run command outside the VM?", `Host working directory: ${hostCwd}`, "", command].join("\n"),
+				["Run command", "Tell pi what to do differently", "Deny"],
 				{ signal },
 			);
+			if (choice === "Run command") return { action: "approve" };
+			if (choice !== "Tell pi what to do differently") return { action: "deny" };
+
+			const feedback = await ctx.ui.input(
+				"Tell pi what to do differently",
+				"Type instructions for pi",
+				{ signal },
+			);
+			const trimmed = feedback?.trim();
+			return trimmed ? { action: "feedback", feedback: trimmed } : { action: "deny" };
 		});
 		approvalQueue = approval.then(
 			() => undefined,
@@ -62,8 +77,12 @@ export default function (pi: ExtensionAPI) {
 				throw new Error("Host command denied: interactive user approval is unavailable");
 			}
 
-			const approved = await requestApproval(params.command, signal, ctx);
-			if (!approved) throw new Error("Host command denied by user");
+			const approval = await requestApproval(params.command, signal, ctx);
+			if (approval.action === "feedback") {
+				pi.sendUserMessage(approval.feedback, { deliverAs: "steer" });
+				throw new Error("Host command denied by user; user supplied new instructions");
+			}
+			if (approval.action === "deny") throw new Error("Host command denied by user");
 
 			return hostBash.execute(id, params, signal, onUpdate, ctx);
 		},
