@@ -11,3 +11,4 @@ The repo should be considered CC0 licensed. Though some content are from other r
 - https://github.com/earendil-works/pi/tree/main/packages/coding-agent/examples/extensions/gondolin
 - https://github.com/tintinweb/pi-subagents
 - https://github.com/ayghri/i-have-adhd
+- https://github.com/mitsuhiko/agent-stuff

@@ -61,8 +61,9 @@ import {
 
 const EXTENSION_DIR = path.dirname(fileURLToPath(import.meta.url));
 const GUEST_WORKSPACE = "/workspace";
-const GITHUB_REPOS_DIR = "/tmp/pi-github-repos";
+const GUEST_LIBRARIAN_CACHE_DIR = "/root/.cache/checkouts";
 const HOST_PI_AGENT_DIR = path.join(process.env.HOME ?? "", ".pi", "agent");
+const HOST_LIBRARIAN_CACHE_DIR = path.join(process.env.HOME ?? "", ".cache", "checkouts");
 const HOST_PI_CREDENTIAL_PATHS = [path.join(HOST_PI_AGENT_DIR, "auth.json")];
 const OCI_IMAGE = "pi-gondolin-rootfs:latest";
 const DEFAULT_IMAGE = "pi-gondolin:latest";
@@ -531,12 +532,12 @@ export default function (pi: ExtensionAPI) {
 	async function startVm(ctx?: ExtensionContext): Promise<VM> {
 		ctx?.ui.setStatus("gondolin", ctx.ui.theme.fg("accent", `Gondolin: starting ${GUEST_WORKSPACE}`));
 		await ensureConfiguredImage(ctx);
-		// pi-web-access clones GitHub repositories on the host. Mount that cache at
-		// the same path so librarian can inspect fetch_content clones in the VM.
-		fs.mkdirSync(GITHUB_REPOS_DIR, { recursive: true });
+		// Librarian manages persistent checkouts from inside the VM. Mount the host
+		// cache at the guest user's default cache path so its helper can update it.
+		fs.mkdirSync(HOST_LIBRARIAN_CACHE_DIR, { recursive: true });
 		const mounts = {
 			[GUEST_WORKSPACE]: new RealFSProvider(localCwd),
-			[GITHUB_REPOS_DIR]: new RealFSProvider(GITHUB_REPOS_DIR),
+			[GUEST_LIBRARIAN_CACHE_DIR]: new RealFSProvider(HOST_LIBRARIAN_CACHE_DIR),
 			[HOST_PI_AGENT_DIR]: protectPiCredentials(
 				new ReadonlyProvider(new RealFSProvider(HOST_PI_AGENT_DIR)),
 				HOST_PI_AGENT_DIR,
@@ -597,7 +598,7 @@ export default function (pi: ExtensionAPI) {
 					`Host workspace: ${localCwd}`,
 					`Guest workspace: ${GUEST_WORKSPACE}`,
 					`Image: ${GONDOLIN_IMAGE}`,
-					`GitHub clone cache: ${GITHUB_REPOS_DIR}`,
+					`Librarian cache: ${HOST_LIBRARIAN_CACHE_DIR} → ${GUEST_LIBRARIAN_CACHE_DIR}`,
 					`Pi agent directory (read-only): ${HOST_PI_AGENT_DIR}`,
 					`Shell: ${shellPath}`,
 				].join("\n"),

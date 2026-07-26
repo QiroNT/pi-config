@@ -5,7 +5,10 @@
     "pnpm"
   ],
   "packages": [
-    "npm:pi-web-access",
+    {
+      "source": "npm:pi-web-access",
+      "skills": []
+    },
     "npm:@tintinweb/pi-subagents"
   ],
   "defaultProvider": "openai-codex",
