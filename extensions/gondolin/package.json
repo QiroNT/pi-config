@@ -6,7 +6,8 @@
 	"scripts": {
 		"clean": "echo 'nothing to clean'",
 		"build": "echo 'nothing to build'",
-		"check": "echo 'nothing to check'"
+		"build:image": "gondolin build --config image.json --tag ghcr.io/catthehacker/ubuntu:custom-latest",
+		"check": "node --experimental-strip-types --check index.ts"
 	},
 	"pi": {
 		"extensions": [

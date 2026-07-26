@@ -1,0 +1,2 @@
+patchedDependencies:
+  '@earendil-works/gondolin': patches/@earendil-works__gondolin.patch

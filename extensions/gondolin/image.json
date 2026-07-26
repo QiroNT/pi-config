@@ -1,0 +1,11 @@
+{
+  "arch": "x86_64",
+  "distro": "alpine",
+  "oci": {
+    "image": "ghcr.io/catthehacker/ubuntu:custom-latest",
+    "pullPolicy": "if-not-present"
+  },
+  "runtimeDefaults": {
+    "rootfsMode": "cow"
+  }
+}

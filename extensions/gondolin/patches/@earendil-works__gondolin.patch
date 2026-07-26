@@ -1,0 +1,13 @@
+diff --git a/dist/src/alpine/kernel-modules.js b/dist/src/alpine/kernel-modules.js
+index 94530bc4c1f738db0492c398b71fae8c749a6861..27810a1df7c8bb5ff2e50118e51375ddfe386d8f 100644
+--- a/dist/src/alpine/kernel-modules.js
++++ b/dist/src/alpine/kernel-modules.js
+@@ -47,7 +47,7 @@ function copyAllKernelModules(srcDir, dstDir) {
+         return;
+     fs.rmSync(dstDir, { recursive: true, force: true });
+     fs.mkdirSync(path.dirname(dstDir), { recursive: true });
+-    fs.cpSync(srcDir, dstDir, { recursive: true, dereference: false });
++    fs.cpSync(srcDir, dstDir, { recursive: true, dereference: false, verbatimSymlinks: true });
+ }
+ function copyInitramfsModules(srcDir, dstDir) {
+     if (!fs.existsSync(srcDir))

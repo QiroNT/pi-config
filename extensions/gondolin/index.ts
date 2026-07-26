@@ -9,6 +9,7 @@
  * Setup:
  *   cd packages/coding-agent/examples/extensions/gondolin
  *   npm install --ignore-scripts
+ *   npm run build:image
  *
  * Usage:
  *   cd /path/to/project
@@ -19,8 +20,17 @@
  *   - QEMU installed (for example, `brew install qemu` on macOS)
  */
 
+import fs from "node:fs";
 import path from "node:path";
-import { RealFSProvider, VM } from "@earendil-works/gondolin";
+import {
+	buildAssets,
+	getDefaultArch,
+	importImageFromDirectory,
+	RealFSProvider,
+	resolveImageSelector,
+	setImageRef,
+	VM,
+} from "@earendil-works/gondolin";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
 	type BashOperations,
@@ -45,6 +55,9 @@ import {
 } from "@earendil-works/pi-coding-agent";
 
 const GUEST_WORKSPACE = "/workspace";
+const GITHUB_REPOS_DIR = "/tmp/pi-github-repos";
+const OCI_IMAGE = "ghcr.io/catthehacker/ubuntu:custom-latest";
+const GONDOLIN_IMAGE = process.env.GONDOLIN_IMAGE ?? OCI_IMAGE;
 const DEFAULT_GREP_LIMIT = 100;
 
 type TextToolResult<TDetails> = {
@@ -312,16 +325,97 @@ async function executeGondolinGrep(
 	};
 }
 
-function sanitizeEnv(env: NodeJS.ProcessEnv | undefined): Record<string, string> | undefined {
-	if (!env) return undefined;
-	const result: Record<string, string> = {};
-	for (const [key, value] of Object.entries(env)) {
-		if (typeof value === "string") result[key] = value;
+// These values describe the host process or point at host-only paths. Passing
+// them into the guest breaks command lookup on hosts such as NixOS and can make
+// guest tools read host-specific configuration. Other variables remain
+// available so callers do not have to maintain a restrictive allowlist.
+const HOST_BOUND_ENV_KEYS = new Set([
+	"BASH_ENV",
+	"BUN_INSTALL",
+	"CARGO_HOME",
+	"CONDA_DEFAULT_ENV",
+	"CONDA_PREFIX",
+	"CPATH",
+	"CPLUS_INCLUDE_PATH",
+	"C_INCLUDE_PATH",
+	"DBUS_SESSION_BUS_ADDRESS",
+	"DENO_INSTALL",
+	"DISPLAY",
+	"ENV",
+	"GIT_ASKPASS",
+	"GIT_CONFIG_GLOBAL",
+	"GIT_CONFIG_SYSTEM",
+	"GIT_EXEC_PATH",
+	"GIT_TEMPLATE_DIR",
+	"GOBIN",
+	"GOPATH",
+	"GPG_AGENT_INFO",
+	"HOME",
+	"HOST",
+	"HOSTNAME",
+	"INFOPATH",
+	"LD_LIBRARY_PATH",
+	"LIBRARY_PATH",
+	"LOCALE_ARCHIVE",
+	"LOGNAME",
+	"MANPATH",
+	"NODE_PATH",
+	"OLDPWD",
+	"PATH",
+	"PI_SESSION_FILE",
+	"PKG_CONFIG_PATH",
+	"PNPM_HOME",
+	"PWD",
+	"PYENV_ROOT",
+	"RUSTUP_HOME",
+	"SHELL",
+	"SHLVL",
+	"SSH_AGENT_PID",
+	"SSH_ASKPASS",
+	"SSH_AUTH_SOCK",
+	"SSL_CERT_DIR",
+	"SSL_CERT_FILE",
+	"TEMP",
+	"TMP",
+	"TMPDIR",
+	"USER",
+	"VIRTUAL_ENV",
+	"WAYLAND_DISPLAY",
+	"ZDOTDIR",
+	"_",
+]);
+
+function isHostBoundEnvKey(key: string): boolean {
+	return HOST_BOUND_ENV_KEYS.has(key) || key.startsWith("NIX_") || key.startsWith("__NIX") || key.startsWith("XDG_");
+}
+
+function createGuestEnv(
+	hostEnv: NodeJS.ProcessEnv | undefined,
+	guestBaseEnv: Readonly<Record<string, string>>,
+): Record<string, string> {
+	const result = { ...guestBaseEnv };
+	if (!hostEnv) return result;
+	for (const [key, value] of Object.entries(hostEnv)) {
+		if (typeof value === "string" && !isHostBoundEnvKey(key)) result[key] = value;
 	}
 	return result;
 }
 
-function createGondolinBashOps(vm: VM, localCwd: string, shellPath: string): BashOperations {
+function parseEnvironment(output: string): Record<string, string> {
+	const result: Record<string, string> = {};
+	for (const line of output.split("\n")) {
+		const separator = line.indexOf("=");
+		if (separator > 0) result[line.slice(0, separator)] = line.slice(separator + 1);
+	}
+	return result;
+}
+
+function createGondolinBashOps(
+	vm: VM,
+	localCwd: string,
+	shellPath: string,
+	guestBaseEnv: Readonly<Record<string, string>>,
+): BashOperations {
 	return {
 		exec: async (command, cwd, { onData, signal, timeout, env }) => {
 			if (signal?.aborted) throw new Error("aborted");
@@ -342,7 +436,7 @@ function createGondolinBashOps(vm: VM, localCwd: string, shellPath: string): Bas
 			try {
 				const proc = vm.exec([shellPath, "-lc", command], {
 					cwd: guestCwd,
-					env: sanitizeEnv(env),
+					env: createGuestEnv(env, guestBaseEnv),
 					signal: controller.signal,
 					stdout: "pipe",
 					stderr: "pipe",
@@ -375,17 +469,53 @@ export default function (pi: ExtensionAPI) {
 	let vm: VM | undefined;
 	let vmStarting: Promise<VM> | undefined;
 	let shellPath = "/bin/sh";
+	let guestBaseEnv: Record<string, string> = {};
+
+	async function ensureConfiguredImage(ctx?: ExtensionContext): Promise<void> {
+		try {
+			resolveImageSelector(GONDOLIN_IMAGE);
+			return;
+		} catch {
+			if (process.env.GONDOLIN_IMAGE) throw new Error(`Gondolin image not found: ${GONDOLIN_IMAGE}`);
+		}
+
+		ctx?.ui.setStatus("gondolin", ctx.ui.theme.fg("accent", `Gondolin: building ${OCI_IMAGE}`));
+		const outputDir = fs.mkdtempSync(path.join("/tmp", "pi-gondolin-image-"));
+		try {
+			const result = await buildAssets(
+				{
+					arch: getDefaultArch(),
+					distro: "alpine",
+					oci: { image: OCI_IMAGE, pullPolicy: "if-not-present" },
+					runtimeDefaults: { rootfsMode: "cow" },
+				},
+				{ outputDir, verbose: true },
+			);
+			const imported = importImageFromDirectory(result.outputDir);
+			setImageRef(GONDOLIN_IMAGE, imported.buildId, imported.arch);
+		} finally {
+			fs.rmSync(outputDir, { recursive: true, force: true });
+		}
+	}
 
 	async function startVm(ctx?: ExtensionContext): Promise<VM> {
 		ctx?.ui.setStatus("gondolin", ctx.ui.theme.fg("accent", `Gondolin: starting ${GUEST_WORKSPACE}`));
+		await ensureConfiguredImage(ctx);
+		// pi-web-access clones GitHub repositories on the host. Mount that cache at
+		// the same path so librarian can inspect fetch_content clones in the VM.
+		fs.mkdirSync(GITHUB_REPOS_DIR, { recursive: true });
 		const created = await VM.create({
 			sessionLabel: `pi ${path.basename(localCwd)}`,
+			sandbox: { imagePath: GONDOLIN_IMAGE },
 			vfs: {
 				mounts: {
 					[GUEST_WORKSPACE]: new RealFSProvider(localCwd),
+					[GITHUB_REPOS_DIR]: new RealFSProvider(GITHUB_REPOS_DIR),
 				},
 			},
 		});
+		const environmentProbe = await created.exec(["/usr/bin/env"]);
+		guestBaseEnv = parseEnvironment(environmentProbe.stdout);
 		const bashProbe = await created.exec(["/bin/sh", "-lc", "command -v bash || true"]);
 		shellPath = bashProbe.stdout.trim() || "/bin/sh";
 		vm = created;
@@ -433,6 +563,8 @@ export default function (pi: ExtensionAPI) {
 					`Gondolin VM: ${activeVm.id}`,
 					`Host workspace: ${localCwd}`,
 					`Guest workspace: ${GUEST_WORKSPACE}`,
+					`Image: ${GONDOLIN_IMAGE}`,
+					`GitHub clone cache: ${GITHUB_REPOS_DIR}`,
 					`Shell: ${shellPath}`,
 				].join("\n"),
 				"info",
@@ -478,7 +610,7 @@ export default function (pi: ExtensionAPI) {
 		async execute(id, params, signal, onUpdate, ctx) {
 			const activeVm = await ensureVm(ctx);
 			const tool = createBashTool(GUEST_WORKSPACE, {
-				operations: createGondolinBashOps(activeVm, localCwd, shellPath),
+				operations: createGondolinBashOps(activeVm, localCwd, shellPath, guestBaseEnv),
 			});
 			return tool.execute(id, params, signal, onUpdate);
 		},
@@ -516,7 +648,7 @@ export default function (pi: ExtensionAPI) {
 
 	pi.on("user_bash", async (_event, ctx) => {
 		const activeVm = await ensureVm(ctx);
-		return { operations: createGondolinBashOps(activeVm, localCwd, shellPath) };
+		return { operations: createGondolinBashOps(activeVm, localCwd, shellPath, guestBaseEnv) };
 	});
 
 	pi.on("before_agent_start", async (event, ctx) => {
