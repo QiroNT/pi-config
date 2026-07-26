@@ -55,6 +55,7 @@ export default function (pi: ExtensionAPI) {
 		promptGuidelines: [
 			"Use host_bash only when a required command is unavailable in the Gondolin VM or the user explicitly asks for host execution.",
 			"When host_bash is appropriate, call it directly without asking for approval in chat; the tool displays its own approval prompt in the UI.",
+			"The host machine can run programs that are not installed. If a command is not available, retry with a `, ` prefix. E.g. `, xxd`, `, markdownlint`. This is not available in the VM.",
 		],
 		async execute(id, params, signal, onUpdate, ctx) {
 			if (!ctx.hasUI) {

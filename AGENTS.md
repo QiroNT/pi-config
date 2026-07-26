@@ -1,9 +1,5 @@
 # Guidelines
 
-## Nix
-
-The host machine runs NixOS, and thus can run programs that are not installed. If a command is not available in the host, retry with a `, ` prefix. E.g. `, xxd`, `, markdownlint`. This is not available in the VM.
-
 ## Output
 
 Before sending, delete:
