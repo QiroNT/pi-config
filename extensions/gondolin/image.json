@@ -2,8 +2,11 @@
   "arch": "x86_64",
   "distro": "alpine",
   "oci": {
-    "image": "ghcr.io/catthehacker/ubuntu:custom-latest",
-    "pullPolicy": "if-not-present"
+    "image": "pi-gondolin-rootfs:latest",
+    "pullPolicy": "never"
+  },
+  "env": {
+    "PATH": "/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
   },
   "runtimeDefaults": {
     "rootfsMode": "cow"

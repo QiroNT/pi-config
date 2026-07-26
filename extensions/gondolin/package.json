@@ -6,7 +6,7 @@
 	"scripts": {
 		"clean": "echo 'nothing to clean'",
 		"build": "echo 'nothing to build'",
-		"build:image": "gondolin build --config image.json --tag ghcr.io/catthehacker/ubuntu:custom-latest",
+		"build:image": "docker build --file bin/Dockerfile --tag pi-gondolin-rootfs:latest . && gondolin build --config image.json --tag pi-gondolin:latest",
 		"check": "node --experimental-strip-types --check index.ts"
 	},
 	"pi": {

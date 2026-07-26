@@ -22,6 +22,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
 	buildAssets,
 	getDefaultArch,
@@ -58,12 +59,14 @@ import {
 	type WriteOperations,
 } from "@earendil-works/pi-coding-agent";
 
+const EXTENSION_DIR = path.dirname(fileURLToPath(import.meta.url));
 const GUEST_WORKSPACE = "/workspace";
 const GITHUB_REPOS_DIR = "/tmp/pi-github-repos";
 const HOST_PI_AGENT_DIR = path.join(process.env.HOME ?? "", ".pi", "agent");
 const HOST_PI_CREDENTIAL_PATHS = [path.join(HOST_PI_AGENT_DIR, "auth.json")];
-const OCI_IMAGE = "ghcr.io/catthehacker/ubuntu:custom-latest";
-const GONDOLIN_IMAGE = process.env.GONDOLIN_IMAGE ?? OCI_IMAGE;
+const OCI_IMAGE = "pi-gondolin-rootfs:latest";
+const DEFAULT_IMAGE = "pi-gondolin:latest";
+const GONDOLIN_IMAGE = process.env.GONDOLIN_IMAGE ?? DEFAULT_IMAGE;
 const DEFAULT_GREP_LIMIT = 100;
 
 type TextToolResult<TDetails> = {
@@ -497,13 +500,23 @@ export default function (pi: ExtensionAPI) {
 		}
 
 		ctx?.ui.setStatus("gondolin", ctx.ui.theme.fg("accent", `Gondolin: building ${OCI_IMAGE}`));
+		const dockerBuild = await pi.exec(
+			"docker",
+			["build", "--file", path.join(EXTENSION_DIR, "bin", "Dockerfile"), "--tag", OCI_IMAGE, EXTENSION_DIR],
+			{ timeout: 30 * 60 * 1000 },
+		);
+		if (dockerBuild.code !== 0) {
+			throw new Error(`Failed to build ${OCI_IMAGE}: ${dockerBuild.stderr || dockerBuild.stdout}`);
+		}
+
 		const outputDir = fs.mkdtempSync(path.join("/tmp", "pi-gondolin-image-"));
 		try {
 			const result = await buildAssets(
 				{
 					arch: getDefaultArch(),
 					distro: "alpine",
-					oci: { image: OCI_IMAGE, pullPolicy: "if-not-present" },
+					oci: { image: OCI_IMAGE, pullPolicy: "never" },
+					env: { PATH: "/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" },
 					runtimeDefaults: { rootfsMode: "cow" },
 				},
 				{ outputDir, verbose: true },
