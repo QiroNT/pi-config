@@ -64,14 +64,15 @@ import {
 const EXTENSION_DIR = path.dirname(fileURLToPath(import.meta.url));
 const GUEST_WORKSPACE = "/workspace";
 const GUEST_LIBRARIAN_CACHE_DIR = "/root/.cache/checkouts";
-const HOST_PI_AGENT_DIR = path.join(process.env.HOME ?? "", ".pi", "agent");
+const HOST_PI_DIR = path.join(process.env.HOME ?? "", ".pi");
 const HOST_LIBRARIAN_CACHE_DIR = path.join(process.env.HOME ?? "", ".cache", "checkouts");
-const HOST_PI_CREDENTIAL_PATHS = [path.join(HOST_PI_AGENT_DIR, "auth.json")];
+const HOST_PI_CREDENTIAL_PATHS = [path.join(HOST_PI_DIR, "agent", "auth.json")];
 const OCI_IMAGE = "pi-gondolin-rootfs:latest";
 const DEFAULT_IMAGE = "pi-gondolin:latest";
 const GONDOLIN_IMAGE = process.env.GONDOLIN_IMAGE ?? DEFAULT_IMAGE;
 const DEFAULT_GREP_LIMIT = 100;
 const CODEX_EXEC_ROUTER = Symbol.for("@howaboua/pi-codex-conversion.exec-router");
+
 type TextToolResult<TDetails> = {
 	content: Array<{ type: "text"; text: string }>;
 	details: TDetails | undefined;
@@ -540,9 +541,9 @@ export default function (pi: ExtensionAPI) {
 		const mounts = {
 			[GUEST_WORKSPACE]: new RealFSProvider(localCwd),
 			[GUEST_LIBRARIAN_CACHE_DIR]: new RealFSProvider(HOST_LIBRARIAN_CACHE_DIR),
-			[HOST_PI_AGENT_DIR]: protectPiCredentials(
-				new ReadonlyProvider(new RealFSProvider(HOST_PI_AGENT_DIR)),
-				HOST_PI_AGENT_DIR,
+			[HOST_PI_DIR]: protectPiCredentials(
+				new ReadonlyProvider(new RealFSProvider(HOST_PI_DIR)),
+				HOST_PI_DIR,
 			),
 		};
 		const created = await VM.create({
