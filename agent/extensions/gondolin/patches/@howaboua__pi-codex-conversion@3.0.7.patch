@@ -1,0 +1,49 @@
+diff --git a/dist/tools/exec/bridge-client.js b/dist/tools/exec/bridge-client.js
+index bd38f14da1acef0a44295ccd883f3302fdb87231..0896194b4033fb64ad7c03b9262870866ba6c3b7 100644
+--- a/dist/tools/exec/bridge-client.js
++++ b/dist/tools/exec/bridge-client.js
+@@ -70,7 +70,7 @@ export function createExecBridgeClient(binaryPath = () => getBundledToolBinaryPa
+         bridgeResponded = false;
+         bridgeStdoutDecoder = new StringDecoder("utf8");
+         bridgeStderrDecoder = new StringDecoder("utf8");
+-        bridge = spawn(binary, [], { stdio: "pipe", env: process.env });
++        bridge = (globalThis[Symbol.for("@howaboua/pi-codex-conversion.exec-router")]?.spawn ?? spawn)(binary, [], { stdio: "pipe", env: process.env });
+         bridge.stdout.on("data", handleStdout);
+         bridge.stderr.on("data", (data) => {
+             bridgeStderr = appendBoundedText(bridgeStderr, bridgeStderrDecoder.write(data));
+@@ -95,7 +95,8 @@ export function createExecBridgeClient(binaryPath = () => getBundledToolBinaryPa
+             const child = getBridge();
+             const response = await new Promise((resolve, reject) => {
+                 pendingBridgeRequests.set(requestId, { resolve: resolve, reject });
+-                child.stdin.write(`${JSON.stringify({ ...request, request_id: requestId })}\n`, (error) => {
++                const routedRequest = globalThis[Symbol.for("@howaboua/pi-codex-conversion.exec-router")]?.prepareExecBridgeRequest?.(request) ?? request;
++                child.stdin.write(`${JSON.stringify({ ...routedRequest, request_id: requestId })}\n`, (error) => {
+                     if (!error)
+                         return;
+                     pendingBridgeRequests.delete(requestId);
+diff --git a/dist/tools/native/runner.js b/dist/tools/native/runner.js
+index 90c16b0d33c54e1dcbb32b11133f6c588ad598e9..913437860976e07e7bf1903c8d51023a9fe738ea 100644
+--- a/dist/tools/native/runner.js
++++ b/dist/tools/native/runner.js
+@@ -15,7 +15,7 @@ export function runBundledTool({ binary, args, stdin, cwd, env, maxBuffer, signa
+         let settled = false;
+         let stdinError;
+         let stdinErrorTimer;
+-        const child = spawn(binary, args, {
++        const child = (globalThis[Symbol.for("@howaboua/pi-codex-conversion.exec-router")]?.spawn ?? spawn)(binary, args, {
+             cwd,
+             env: env ?? process.env,
+             stdio: [stdin === undefined ? "ignore" : "pipe", "pipe", "pipe"],
+diff --git a/dist/tools/web-run/tool.js b/dist/tools/web-run/tool.js
+index 4656b440ae8556285ef7a6e3eba972e6e4d47b21..53b46c4c300b09eb3b8380d9c52636fab295274b 100644
+--- a/dist/tools/web-run/tool.js
++++ b/dist/tools/web-run/tool.js
+@@ -57,7 +57,7 @@ function webSearchCallDetail(params) {
+ }
+ async function runWebRunBinary(webRunPath, params, env, signal) {
+     return new Promise((resolve, reject) => {
+-        const child = spawn(webRunPath, ["-"], { env, signal: signal ?? undefined, stdio: ["pipe", "pipe", "pipe"] });
++        const child = (globalThis[Symbol.for("@howaboua/pi-codex-conversion.exec-router")]?.spawn ?? spawn)(webRunPath, ["-"], { env, signal: signal ?? undefined, stdio: ["pipe", "pipe", "pipe"] });
+         let stdout = "";
+         let stderr = "";
+         let settled = false;
