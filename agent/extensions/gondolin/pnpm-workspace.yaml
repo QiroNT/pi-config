@@ -4,8 +4,6 @@ allowBuilds:
   protobufjs: false
   ssh2: true
   tree-sitter-bash: true
-minimumReleaseAgeExclude:
-  - '@howaboua/pi-codex-conversion@2.2.22'
 patchedDependencies:
   '@earendil-works/gondolin': patches/@earendil-works__gondolin.patch
   '@howaboua/pi-codex-conversion@2.2.22': patches/@howaboua__pi-codex-conversion@2.2.22.patch
