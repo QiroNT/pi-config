@@ -1,5 +1,5 @@
 {
-  "lastChangelogVersion": "0.82.1",
+  "lastChangelogVersion": "0.83.0",
   "theme": "dark",
   "npmCommand": [
     "pnpm"
@@ -9,11 +9,15 @@
       "source": "npm:pi-web-access",
       "skills": []
     },
-    "npm:@tintinweb/pi-subagents"
+    "npm:@tintinweb/pi-subagents",
+    "npm:@narumitw/pi-usage",
+    "npm:@firstpick/pi-extension-stats",
+    "npm:@firstpick/pi-utils"
   ],
   "defaultProvider": "openai-codex",
   "defaultModel": "gpt-5.6-sol",
   "enableInstallTelemetry": false,
   "steeringMode": "all",
-  "followUpMode": "all"
+  "followUpMode": "all",
+  "defaultThinkingLevel": "high"
 }
