@@ -1,6 +1,6 @@
-/npm
-/sessions
-/auth.json
-/models-store.json
+/agent/npm
+/agent/sessions
+/agent/auth.json
+/agent/models-store.json
 
 node_modules
