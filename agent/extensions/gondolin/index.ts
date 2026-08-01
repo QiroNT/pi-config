@@ -9,13 +9,7 @@ import {
 	installCodexRouter,
 	uninstallCodexRouter,
 } from "./src/codex-router.ts";
-import {
-	GONDOLIN_IMAGE,
-	GUEST_LIBRARIAN_CACHE_DIR,
-	HOST_LIBRARIAN_CACHE_DIR,
-	HOST_PI_DIR,
-	createGondolinRuntime,
-} from "./src/vm.ts";
+import { createGondolinRuntime, } from "./src/vm.ts";
 import { createGondolinBashOps } from "./src/shell.ts";
 import { GUEST_WORKSPACE } from "./src/paths.ts";
 import { registerGondolinTools } from "./src/tools.ts";
@@ -44,10 +38,6 @@ export default function (pi: ExtensionAPI) {
 				[
 					`Gondolin VM: ${vm.id}`,
 					`Host workspace: ${localCwd}`,
-					`Guest workspace: ${GUEST_WORKSPACE}`,
-					`Image: ${GONDOLIN_IMAGE}`,
-					`Librarian cache: ${HOST_LIBRARIAN_CACHE_DIR} → ${GUEST_LIBRARIAN_CACHE_DIR}`,
-					`Pi directory (read-only): ${HOST_PI_DIR}`,
 					`Shell: ${runtime.shellPath}`,
 				].join("\n"),
 				"info",

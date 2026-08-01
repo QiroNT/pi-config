@@ -16,9 +16,10 @@ import { GUEST_WORKSPACE, protectPiCredentials } from "./paths.ts";
 import { parseEnvironment } from "./shell.ts";
 
 const EXTENSION_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-export const GUEST_LIBRARIAN_CACHE_DIR = "/root/.cache/checkouts";
+const GUEST_LIBRARIAN_CACHE_DIR = "/root/.cache/checkouts";
+const HOST_LIBRARIAN_CACHE_DIR = path.join(process.env.HOME ?? "", ".cache", "checkouts");
 export const HOST_PI_DIR = path.join(process.env.HOME ?? "", ".pi");
-export const HOST_LIBRARIAN_CACHE_DIR = path.join(process.env.HOME ?? "", ".cache", "checkouts");
+const HOST_PNPM_STORE_DIR = path.join(process.env.HOME ?? "", ".local", "share", "pnpm");
 
 const OCI_IMAGE = "pi-gondolin-rootfs:latest";
 const DEFAULT_IMAGE = "pi-gondolin:latest";
@@ -97,16 +98,11 @@ class DefaultGondolinRuntime implements GondolinRuntime {
 	async #startVm(ctx?: ExtensionContext): Promise<VM> {
 		ctx?.ui.setStatus("gondolin", ctx.ui.theme.fg("accent", `Gondolin: starting ${GUEST_WORKSPACE}`));
 		await this.#ensureConfiguredImage(ctx);
-		// Librarian manages persistent checkouts from inside the VM. Mount the host
-		// cache at the guest user's default cache path so its helper can update it.
-		fs.mkdirSync(HOST_LIBRARIAN_CACHE_DIR, { recursive: true });
 		const mounts = {
 			[GUEST_WORKSPACE]: new RealFSProvider(this.#localCwd),
 			[GUEST_LIBRARIAN_CACHE_DIR]: new RealFSProvider(HOST_LIBRARIAN_CACHE_DIR),
-			[HOST_PI_DIR]: protectPiCredentials(
-				new ReadonlyProvider(new RealFSProvider(HOST_PI_DIR)),
-				HOST_PI_DIR,
-			),
+			[HOST_PI_DIR]: protectPiCredentials(new ReadonlyProvider(new RealFSProvider(HOST_PI_DIR)), HOST_PI_DIR),
+			[HOST_PNPM_STORE_DIR]: new RealFSProvider(HOST_PNPM_STORE_DIR),
 		};
 		const created = await VM.create({
 			sessionLabel: `pi ${path.basename(this.#localCwd)}`,
