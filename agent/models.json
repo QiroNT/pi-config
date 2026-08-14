@@ -1,0 +1,11 @@
+{
+  "providers": {
+    "deepseek": {
+      "modelOverrides": {
+        "deepseek-v4-flash": {
+          "contextWindow": 262144
+        }
+      }
+    }
+  }
+}

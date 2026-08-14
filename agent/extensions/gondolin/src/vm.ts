@@ -16,8 +16,7 @@ import { GUEST_WORKSPACE, protectPiCredentials } from "./paths.ts";
 import { parseEnvironment } from "./shell.ts";
 
 const EXTENSION_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const GUEST_LIBRARIAN_CACHE_DIR = "/root/.cache/checkouts";
-const HOST_LIBRARIAN_CACHE_DIR = path.join(process.env.HOME ?? "", ".cache", "checkouts");
+const LIBRARIAN_CACHE_DIR = path.join(process.env.HOME ?? "", ".cache", "checkouts");
 export const HOST_PI_DIR = path.join(process.env.HOME ?? "", ".pi");
 const HOST_PNPM_STORE_DIR = path.join(process.env.HOME ?? "", ".local", "share", "pnpm");
 
@@ -100,7 +99,7 @@ class DefaultGondolinRuntime implements GondolinRuntime {
 		await this.#ensureConfiguredImage(ctx);
 		const mounts = {
 			[GUEST_WORKSPACE]: new RealFSProvider(this.#localCwd),
-			[GUEST_LIBRARIAN_CACHE_DIR]: new RealFSProvider(HOST_LIBRARIAN_CACHE_DIR),
+			[LIBRARIAN_CACHE_DIR]: new RealFSProvider(LIBRARIAN_CACHE_DIR),
 			[HOST_PI_DIR]: protectPiCredentials(new ReadonlyProvider(new RealFSProvider(HOST_PI_DIR)), HOST_PI_DIR),
 			[HOST_PNPM_STORE_DIR]: new RealFSProvider(HOST_PNPM_STORE_DIR),
 		};

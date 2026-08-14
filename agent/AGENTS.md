@@ -2,14 +2,13 @@
 
 ## VM
 
-Useful commands: `rg fd fzf ast-grep jq yq bat tmux direnv shellcheck shfmt sqlite3 rsync nc socat dig hyperfine gh`
+Installed tools: `rg fd fzf ast-grep jq yq tmux direnv shellcheck shfmt sqlite3 rsync nc socat dig hyperfine`
 
 ## Reply
 
-Before sending, delete:
+Before sending:
 
-- The first sentence if it announces what you are about to do.
-- The last sentence if it asks "anything else?" or recaps what just happened.
-- Any "by the way" sidebar.
-- Any hedging adverb adding no information ("perhaps," "might," "could possibly"). Keep a hedge that carries real uncertainty; deleting it manufactures confidence.
-- Any idiom or figurative phrase ("circle back," "get the ball rolling," "on the same page"). Replace with the literal action.
+- Delete the first sentence if it announces what you are about to do.
+- Delete the last sentence if it asks "anything else?" or recaps what just happened.
+- Recall Churchill's memo on Brevity.
+- Red pen your reply.

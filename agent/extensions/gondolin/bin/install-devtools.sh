@@ -6,7 +6,7 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y --no-install-recommends \
   aria2 bat bzip2 ca-certificates cargo clang clangd cmake curl default-jdk-headless \
-  direnv dnsutils fd-find file fzf g++ gcc gdb git golang-go hyperfine jq less \
+  direnv dnsutils fd-find ffmpeg file fzf g++ gcc gdb git golang-go hyperfine jq less \
   lldb luajit make nano neovim netcat-openbsd ninja-build nodejs npm \
   openssh-client pkg-config python3 python3-dev python3-pip python3-venv \
   ripgrep rsync rustc shellcheck shfmt socat sqlite3 strace tmux tree unzip \

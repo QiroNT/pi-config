@@ -2,5 +2,6 @@
 /agent/sessions
 /agent/auth.json
 /agent/models-store.json
+/account-switcher/accounts.json
 
 node_modules
