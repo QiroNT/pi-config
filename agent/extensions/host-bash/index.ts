@@ -16,6 +16,7 @@ export default function (pi: ExtensionAPI) {
 
 	type ApprovalResult =
 		| { action: "approve" }
+		| { action: "vm" }
 		| { action: "deny" }
 		| { action: "feedback"; feedback: string };
 
@@ -27,11 +28,12 @@ export default function (pi: ExtensionAPI) {
 		const approval = approvalQueue.then(async (): Promise<ApprovalResult> => {
 			if (signal.aborted) throw signal.reason ?? new Error("Host command cancelled");
 			const choice = await ctx.ui.select(
-				["Run command outside the VM?", `Host working directory: ${hostCwd}`, "", command].join("\n"),
-				["Run command", "Tell pi what to do differently", "Deny"],
+				[`Run command outside the VM? Host working directory: ${hostCwd}`, "", command].join("\n"),
+				["Run command", "Run in VM", "Tell pi what to do differently", "Deny"],
 				{ signal },
 			);
 			if (choice === "Run command") return { action: "approve" };
+			if (choice === "Run in VM") return { action: "vm" };
 			if (choice !== "Tell pi what to do differently") return { action: "deny" };
 
 			const feedback = await ctx.ui.input(
@@ -63,26 +65,29 @@ export default function (pi: ExtensionAPI) {
 	pi.registerTool({
 		...hostBash,
 		name: "host_bash",
-		label: "host bash",
+		label: "bash on host",
 		description:
 			"Execute a bash command on the host machine, outside the VM. Returns stdout and stderr using the same truncation limits as bash.",
 		promptSnippet: "Execute a command on the host outside the VM",
 		promptGuidelines: [
-			"Use host_bash only when a required command is unavailable in the Gondolin VM or the user explicitly asks for host execution.",
+			"Use host_bash only when a required command is unavailable in the Gondolin VM, or the user explicitly asks for host execution.",
 			"When host_bash is appropriate, call it directly without asking for approval in chat; the tool displays its own approval prompt in the UI.",
-			"The host machine can run programs that are not installed. If a command is not available, retry with a comma prefix like ', nvcc'. This is not available in the VM.",
+			"When using host_bash, format nontrivial commands as readable multiline scripts with one operation or pipeline stage per line.",
 		],
 		async execute(id, params, signal, onUpdate, ctx) {
 			if (!ctx.hasUI) {
-				throw new Error("Host command denied: interactive user approval is unavailable");
+				throw new Error("Host command denied: interactive user approval is unavailable.");
 			}
 
 			const approval = await requestApproval(params.command, signal, ctx);
+			if (approval.action === "vm") {
+				throw new Error("Host command not run: user requested to retry in the VM, adapting paths as needed.");
+			}
 			if (approval.action === "feedback") {
 				pi.sendUserMessage(approval.feedback, { deliverAs: "steer" });
-				throw new Error("Host command denied by user; user supplied new instructions");
+				throw new Error("Host command denied: user supplied new instructions.");
 			}
-			if (approval.action === "deny") throw new Error("Host command denied by user");
+			if (approval.action === "deny") throw new Error("Host command denied by user.");
 
 			return hostBash.execute(id, params, signal, onUpdate, ctx);
 		},

@@ -43,7 +43,7 @@ The script will:
 4. Fetch from `origin` when stale (default interval: 300s).
 5. Attempt a fast-forward merge if the checkout is clean and has an upstream.
 
-The host's `~/.cache/checkouts` is mounted in the VM. Use tools in the VM to interact with the checkout.
+The script will return the checked-out cache location. The path is valid both in the VM and on the host.
 
 ## Update strategy
 

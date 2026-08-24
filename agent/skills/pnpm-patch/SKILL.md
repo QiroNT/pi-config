@@ -7,6 +7,8 @@ description: "Create or update a pnpm patch that changes behavior of an dependen
 
 Patch an installed dependency to fix problems in the current workspace.
 
+The user should be asked before a new patch is made, since using private APIs can hinder maintainability. Presenting a pseudo version of your patch is encouraged. This rule only applies to new patches, not updates.
+
 ## Diverge at the smallest stable interface
 
 The goal is to make the patched dependency diverge in the smallest possible unit of code.

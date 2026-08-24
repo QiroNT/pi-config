@@ -1,8 +1,8 @@
 diff --git a/dist/tools/exec/bridge-client.js b/dist/tools/exec/bridge-client.js
-index bd38f14da1acef0a44295ccd883f3302fdb87231..0896194b4033fb64ad7c03b9262870866ba6c3b7 100644
+index 6cf4f5046bc98140a130933a1c28dc39182dc6e2..786bda163fa463b6c24f3e68a05c6ece40269c12 100644
 --- a/dist/tools/exec/bridge-client.js
 +++ b/dist/tools/exec/bridge-client.js
-@@ -70,7 +70,7 @@ export function createExecBridgeClient(binaryPath = () => getBundledToolBinaryPa
+@@ -75,7 +75,7 @@ export function createExecBridgeClient(binaryPath = () => getBundledToolBinaryPa
          bridgeResponded = false;
          bridgeStdoutDecoder = new StringDecoder("utf8");
          bridgeStderrDecoder = new StringDecoder("utf8");
@@ -11,16 +11,16 @@ index bd38f14da1acef0a44295ccd883f3302fdb87231..0896194b4033fb64ad7c03b926287086
          bridge.stdout.on("data", handleStdout);
          bridge.stderr.on("data", (data) => {
              bridgeStderr = appendBoundedText(bridgeStderr, bridgeStderrDecoder.write(data));
-@@ -95,7 +95,8 @@ export function createExecBridgeClient(binaryPath = () => getBundledToolBinaryPa
-             const child = getBridge();
-             const response = await new Promise((resolve, reject) => {
-                 pendingBridgeRequests.set(requestId, { resolve: resolve, reject });
--                child.stdin.write(`${JSON.stringify({ ...request, request_id: requestId })}\n`, (error) => {
-+                const routedRequest = globalThis[Symbol.for("@howaboua/pi-codex-conversion.exec-router")]?.prepareExecBridgeRequest?.(request) ?? request;
-+                child.stdin.write(`${JSON.stringify({ ...routedRequest, request_id: requestId })}\n`, (error) => {
-                     if (!error)
-                         return;
-                     pendingBridgeRequests.delete(requestId);
+@@ -99,7 +99,8 @@ export function createExecBridgeClient(binaryPath = () => getBundledToolBinaryPa
+         const child = existingChild ?? getBridge();
+         const response = await new Promise((resolve, reject) => {
+             pendingBridgeRequests.set(requestId, { resolve: resolve, reject });
+-            child.stdin.write(`${JSON.stringify({ ...value, request_id: requestId })}\n`, (error) => {
++            const routedRequest = globalThis[Symbol.for("@howaboua/pi-codex-conversion.exec-router")]?.prepareExecBridgeRequest?.(value) ?? value;
++            child.stdin.write(`${JSON.stringify({ ...routedRequest, request_id: requestId })}\n`, (error) => {
+                 if (!error)
+                     return;
+                 pendingBridgeRequests.delete(requestId);
 diff --git a/dist/tools/native/runner.js b/dist/tools/native/runner.js
 index 90c16b0d33c54e1dcbb32b11133f6c588ad598e9..913437860976e07e7bf1903c8d51023a9fe738ea 100644
 --- a/dist/tools/native/runner.js
@@ -35,10 +35,10 @@ index 90c16b0d33c54e1dcbb32b11133f6c588ad598e9..913437860976e07e7bf1903c8d51023a
              env: env ?? process.env,
              stdio: [stdin === undefined ? "ignore" : "pipe", "pipe", "pipe"],
 diff --git a/dist/tools/web-run/tool.js b/dist/tools/web-run/tool.js
-index 4656b440ae8556285ef7a6e3eba972e6e4d47b21..53b46c4c300b09eb3b8380d9c52636fab295274b 100644
+index e9368e65d4db9c4dc437eb599649e8022254a240..555979c9b030f0043a6b67f8e9c5eda324618d67 100644
 --- a/dist/tools/web-run/tool.js
 +++ b/dist/tools/web-run/tool.js
-@@ -57,7 +57,7 @@ function webSearchCallDetail(params) {
+@@ -56,7 +56,7 @@ function webSearchCallDetail(params) {
  }
  async function runWebRunBinary(webRunPath, params, env, signal) {
      return new Promise((resolve, reject) => {

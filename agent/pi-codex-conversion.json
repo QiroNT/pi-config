@@ -12,7 +12,8 @@
     "applyPatchOnly": false,
     "viewImageOnly": false,
     "webRunOnly": false,
-    "imageGenerationOnly": false
+    "imageGenerationOnly": false,
+    "customRustBinariesDir": ""
   },
   "ui": {
     "statusLine": true,
@@ -27,11 +28,7 @@
   },
   "compaction": {
     "responsesCompaction": false,
-    "version": "v1"
-  },
-  "beta": {
-    "codeMode": false,
-    "responsesLite": false,
+    "version": "v1",
     "v2UserMessageRetention": 64
   },
   "voice": {
@@ -41,12 +38,29 @@
     "v3Voice": "cove",
     "dictationShortcut": "ctrl+alt+d",
     "realtimeShortcut": "ctrl+alt+space",
-    "dictationShortcutMode": "push"
+    "dictationShortcutMode": "push",
+    "autoResumeRealtime": false,
+    "audioSetupCompleted": true,
+    "delegationAcknowledgements": true,
+    "forwardReasoningSummaries": true,
+    "muteShortcut": "ctrl+alt+m",
+    "serverShortcut": "ctrl+alt+g",
+    "contextReasoning": "high"
   },
   "openai": {
     "fast": false,
     "verbosity": "low",
     "forceCachedWebSockets": true,
-    "webSearchModel": "gpt-5.6-luna"
+    "webSearchModel": "gpt-5.6-luna",
+    "proxyResponsesLite": false,
+    "cacheDiagnostics": "off",
+    "harnessIdentifierHeader": false
+  },
+  "executionMode": "normal",
+  "prompt": {
+    "heavySystemPromptOverwrite": false
+  },
+  "notebook": {
+    "maxHeapMiB": 4096
   }
 }
