@@ -1,5 +1,5 @@
 {
-  "lastChangelogVersion": "0.84.2",
+  "lastChangelogVersion": "0.84.3",
   "theme": "dark",
   "npmCommand": [
     "pnpm"
@@ -12,8 +12,7 @@
     "npm:@tintinweb/pi-subagents",
     "npm:@narumitw/pi-usage",
     "npm:@firstpick/pi-extension-stats",
-    "npm:@firstpick/pi-utils",
-    "npm:@hieplp/pi-account-switcher"
+    "npm:@firstpick/pi-utils"
   ],
   "defaultProvider": "openai-codex",
   "defaultModel": "gpt-5.6-sol",

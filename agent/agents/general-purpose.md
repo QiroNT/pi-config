@@ -5,5 +5,3 @@ tools: all
 disallowed_tools: host_bash
 prompt_mode: append
 ---
-
-

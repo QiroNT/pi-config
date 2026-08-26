@@ -4,106 +4,130 @@ import { createBashToolDefinition } from "@earendil-works/pi-coding-agent";
 
 const VM_COMMAND_NOT_FOUND = /(?:command not found|Command exited with code 127)/i;
 const HOST_BASH_HINT =
-	"[Hint: This command appears to be unavailable in the VM. If it may be installed on the host, retry with host_bash.]";
+  "[Hint: This command appears to be unavailable in the VM. If it may be installed on the host, retry with host_bash.]";
+
+export function findChainedLine(command: string): string | undefined {
+  if (command.includes("\n")) return undefined;
+  const stripped = command
+    .replace(/\\./g, " ")
+    .replace(/"([^"\\]|\\.)*"|'[^']*'/g, " ")
+    .replace(/\s#.*$/, "")
+    .replace(/;[;&]/g, " ")
+    .replace(/\d*&>|>&|&>/g, " ")
+    .replace(/[;|&\s]+$/, "");
+  return /[;|&]/.test(stripped) ? "complex one-liner chain" : undefined;
+}
 
 /**
  * Adds an explicitly approved escape hatch for commands that must run on the
  * host instead of in the Gondolin VM.
  */
 export default function (pi: ExtensionAPI) {
-	const hostCwd = process.cwd();
-	const commaPicker = fileURLToPath(new URL("./bin/comma-picker", import.meta.url));
+  const hostCwd = process.cwd();
+  const commaPicker = fileURLToPath(new URL("./bin/comma-picker", import.meta.url));
 
-	type ApprovalResult =
-		| { action: "approve" }
-		| { action: "vm" }
-		| { action: "deny" }
-		| { action: "feedback"; feedback: string };
+  type ApprovalResult =
+    | { action: "approve" }
+    | { action: "vm" }
+    | { action: "deny" }
+    | { action: "feedback"; feedback: string };
 
-	// Pi's modal UI supports only one prompt at a time. Tool calls may execute
-	// concurrently, so queue approval prompts while allowing approved commands
-	// to continue running in parallel.
-	let approvalQueue: Promise<void> = Promise.resolve();
-	const requestApproval = (command: string, signal: AbortSignal, ctx: ExtensionContext) => {
-		const approval = approvalQueue.then(async (): Promise<ApprovalResult> => {
-			if (signal.aborted) throw signal.reason ?? new Error("Host command cancelled");
-			const choice = await ctx.ui.select(
-				[`Run command outside the VM? Host working directory: ${hostCwd}`, "", command].join("\n"),
-				["Run command", "Run in VM", "Tell pi what to do differently", "Deny"],
-				{ signal },
-			);
-			if (choice === "Run command") return { action: "approve" };
-			if (choice === "Run in VM") return { action: "vm" };
-			if (choice !== "Tell pi what to do differently") return { action: "deny" };
+  // Pi's modal UI supports only one prompt at a time. Tool calls may execute
+  // concurrently, so queue approval prompts while allowing approved commands
+  // to continue running in parallel.
+  let approvalQueue: Promise<void> = Promise.resolve();
+  const requestApproval = (command: string, signal: AbortSignal, ctx: ExtensionContext) => {
+    const approval = approvalQueue.then(async (): Promise<ApprovalResult> => {
+      if (signal.aborted) throw signal.reason ?? new Error("Host command cancelled");
+      const choice = await ctx.ui.select(
+        [`Run command outside the VM? Host working directory: ${hostCwd}`, "", command].join("\n"),
+        ["Run command", "Run in VM", "Tell pi what to do differently", "Deny"],
+        { signal },
+      );
+      if (choice === "Run command") return { action: "approve" };
+      if (choice === "Run in VM") return { action: "vm" };
+      if (choice !== "Tell pi what to do differently") return { action: "deny" };
 
-			const feedback = await ctx.ui.input(
-				"Tell pi what to do differently",
-				"Type instructions for pi",
-				{ signal },
-			);
-			const trimmed = feedback?.trim();
-			return trimmed ? { action: "feedback", feedback: trimmed } : { action: "deny" };
-		});
-		approvalQueue = approval.then(
-			() => undefined,
-			() => undefined,
-		);
-		return approval;
-	};
+      const feedback = await ctx.ui.input(
+        "Tell pi what to do differently",
+        "Type instructions for pi",
+        { signal },
+      );
+      const trimmed = feedback?.trim();
+      return trimmed ? { action: "feedback", feedback: trimmed } : { action: "deny" };
+    });
+    approvalQueue = approval.then(
+      () => undefined,
+      () => undefined,
+    );
+    return approval;
+  };
 
-	// Use the definition rather than the SDK-wrapped tool so host_bash keeps
-	// bash's renderCall/renderResult, including collapsed output previews.
-	const hostBash = createBashToolDefinition(hostCwd, {
-		spawnHook(context) {
-			return {
-				...context,
-				env: { ...context.env, COMMA_PICKER: commaPicker },
-			};
-		},
-	});
+  // Use the definition rather than the SDK-wrapped tool so host_bash keeps
+  // bash's renderCall/renderResult, including collapsed output previews.
+  const hostBash = createBashToolDefinition(hostCwd, {
+    spawnHook(context) {
+      return {
+        ...context,
+        env: { ...context.env, COMMA_PICKER: commaPicker },
+      };
+    },
+  });
 
-	pi.registerTool({
-		...hostBash,
-		name: "host_bash",
-		label: "bash on host",
-		description:
-			"Execute a bash command on the host machine, outside the VM. Returns stdout and stderr using the same truncation limits as bash.",
-		promptSnippet: "Execute a command on the host outside the VM",
-		promptGuidelines: [
-			"Use host_bash only when a required command is unavailable in the Gondolin VM, or the user explicitly asks for host execution.",
-			"When host_bash is appropriate, call it directly without asking for approval in chat; the tool displays its own approval prompt in the UI.",
-			"When using host_bash, format nontrivial commands as readable multiline scripts with one operation or pipeline stage per line.",
-		],
-		async execute(id, params, signal, onUpdate, ctx) {
-			if (!ctx.hasUI) {
-				throw new Error("Host command denied: interactive user approval is unavailable.");
-			}
+  pi.registerTool({
+    ...hostBash,
+    name: "host_bash",
+    label: "bash on host",
+    description:
+      "Execute a bash command on the host machine, outside the VM. Returns stdout and stderr using the same truncation limits as bash.",
+    promptSnippet: "Execute a command on the host outside the VM",
+    promptGuidelines: [
+      "Use host_bash only when a required command is unavailable in the Gondolin VM, or the user explicitly asks for host execution.",
+      "When host_bash is appropriate, call it directly without asking for approval in chat; the tool displays its own approval prompt in the UI.",
+      "When using host_bash, format nontrivial commands as readable multiline scripts with one operation or pipeline stage per line.",
+    ],
+    async execute(id, params, signal, onUpdate, ctx) {
+      if (!ctx.hasUI) {
+        throw new Error("Host command denied: interactive user approval is unavailable.");
+      }
 
-			const approval = await requestApproval(params.command, signal, ctx);
-			if (approval.action === "vm") {
-				throw new Error("Host command not run: user requested to retry in the VM, adapting paths as needed.");
-			}
-			if (approval.action === "feedback") {
-				pi.sendUserMessage(approval.feedback, { deliverAs: "steer" });
-				throw new Error("Host command denied: user supplied new instructions.");
-			}
-			if (approval.action === "deny") throw new Error("Host command denied by user.");
+      const lint = findChainedLine(params.command.trim());
+      if (lint) {
+        throw new Error(
+          `Host command auto rejected: ${lint}. Read the tool guidelines and apply appropriate formatting.`,
+        );
+      }
 
-			return hostBash.execute(id, params, signal, onUpdate, ctx);
-		},
-	});
+      const approval = await requestApproval(params.command, signal, ctx);
+      if (approval.action === "vm") {
+        throw new Error(
+          "Host command not run: user requested to retry in the VM, adapting paths as needed.",
+        );
+      }
+      if (approval.action === "feedback") {
+        pi.sendUserMessage(approval.feedback, { deliverAs: "steer" });
+        throw new Error("Host command denied: user supplied new instructions.");
+      }
+      if (approval.action === "deny") throw new Error("Host command denied by user.");
 
-	pi.on("tool_result", (event) => {
-		if (event.toolName !== "bash" || !event.isError) return;
+      return hostBash.execute(id, params, signal, onUpdate, ctx);
+    },
+  });
 
-		const output = event.content
-			.filter((item): item is Extract<(typeof event.content)[number], { type: "text" }> => item.type === "text")
-			.map((item) => item.text)
-			.join("\n");
-		if (!VM_COMMAND_NOT_FOUND.test(output) || output.includes(HOST_BASH_HINT)) return;
+  pi.on("tool_result", (event) => {
+    if (event.toolName !== "bash" || !event.isError) return;
 
-		return {
-			content: [...event.content, { type: "text" as const, text: HOST_BASH_HINT }],
-		};
-	});
+    const output = event.content
+      .filter(
+        (item): item is Extract<(typeof event.content)[number], { type: "text" }> =>
+          item.type === "text",
+      )
+      .map((item) => item.text)
+      .join("\n");
+    if (!VM_COMMAND_NOT_FOUND.test(output) || output.includes(HOST_BASH_HINT)) return;
+
+    return {
+      content: [...event.content, { type: "text" as const, text: HOST_BASH_HINT }],
+    };
+  });
 }

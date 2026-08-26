@@ -1,11 +1,12 @@
 ---
 name: librarian
-description: "Cache and refresh remote git repositories under ~/.cache/checkouts/<host>/<org>/<repo> so future references can reuse a local copy. Use this skill when the user points you to a remote git repository as reference or you encountered a remote git repo through other means."
+description: "Fetch and cache remote git repositories. Use this skill when the user points you to a remote git repository, or you encountered a remote git repo through other means."
 ---
 
 Use this skill when the user points you to a remote git repository (GitHub/GitLab/Bitbucket URLs, `git@...`, or `owner/repo` shorthand).
 
 The goal is to keep a reusable local checkout that is:
+
 - **stable** (predictable path)
 - **up to date** (periodic fetch + fast-forward when safe)
 - **efficient** (partial clone with `--filter=blob:none`, no repeated full clones)
@@ -37,6 +38,7 @@ bash ~/.pi/agent/skills/librarian/checkout.sh https://github.com/mitsuhiko/minij
 ```
 
 The script will:
+
 1. Parse the repo reference into host/org/repo.
 2. Clone if missing.
 3. Reuse existing checkout if present.

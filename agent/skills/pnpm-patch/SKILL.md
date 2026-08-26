@@ -1,6 +1,6 @@
 ---
 name: pnpm-patch
-description: "Create or update a pnpm patch that changes behavior of an dependency in the current workspace. Use when encoutering an issue in a dependency."
+description: "Create or update a pnpm patch that changes behavior of an dependency. Use when encoutering an issue in a node dependency."
 ---
 
 # pnpm patch
