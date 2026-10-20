@@ -36,9 +36,9 @@ export default function (pi: ExtensionAPI) {
   // concurrently, so queue approval prompts while allowing approved commands
   // to continue running in parallel.
   let approvalQueue: Promise<void> = Promise.resolve();
-  const requestApproval = (command: string, signal: AbortSignal, ctx: ExtensionContext) => {
+  const requestApproval = (command: string, signal: AbortSignal | undefined, ctx: ExtensionContext) => {
     const approval = approvalQueue.then(async (): Promise<ApprovalResult> => {
-      if (signal.aborted) throw signal.reason ?? new Error("Host command cancelled");
+      if (signal?.aborted) throw signal.reason ?? new Error("Host command cancelled");
       const choice = await ctx.ui.select(
         [`Run command outside the VM? Host working directory: ${hostCwd}`, "", command].join("\n"),
         ["Run command", "Run in VM", "Tell pi what to do differently", "Deny"],

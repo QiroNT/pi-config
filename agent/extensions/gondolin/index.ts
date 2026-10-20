@@ -47,11 +47,6 @@ export default function (pi: ExtensionAPI) {
 
   pi.on("before_agent_start", async (event, ctx) => {
     await runtime.ensureVm(ctx);
-    const localLine = `Current working directory: ${localCwd}`;
-    const guestLine = `Current working directory: ${GUEST_WORKSPACE} (Gondolin VM; host workspace mounted from ${localCwd})`;
-    const systemPrompt = event.systemPrompt.includes(localLine)
-      ? event.systemPrompt.replace(localLine, guestLine)
-      : `${event.systemPrompt}\n\n${guestLine}`;
-    return { systemPrompt };
+    event.systemPromptOptions.cwd = `${GUEST_WORKSPACE} (Gondolin VM; host workspace mounted from ${localCwd})`;
   });
 }

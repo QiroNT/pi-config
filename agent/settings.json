@@ -20,5 +20,6 @@
   "steeringMode": "all",
   "followUpMode": "all",
   "defaultThinkingLevel": "high",
+  "defaultTools": ["+codemode"],
   "hideThinkingBlock": false
 }
