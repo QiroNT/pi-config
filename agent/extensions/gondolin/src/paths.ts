@@ -4,9 +4,8 @@ import {
   ShadowProvider,
   type VirtualProvider,
 } from "@earendil-works/gondolin";
-import { HOST_PI_DIR } from "./vm.ts";
-
 export const GUEST_WORKSPACE = "/workspace";
+export const HOST_PI_DIR = path.join(process.env.HOME ?? "", ".pi");
 
 const HOST_PI_CREDENTIAL_PATHS = [
   path.join(HOST_PI_DIR, "agent", "auth.json"),

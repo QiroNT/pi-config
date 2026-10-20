@@ -8,4 +8,3 @@ allowBuilds:
 minimumReleaseAge: 0
 patchedDependencies:
   "@earendil-works/gondolin": patches/@earendil-works__gondolin.patch
-  "@howaboua/pi-codex-conversion@3.0.23": patches/@howaboua__pi-codex-conversion@3.0.23.patch

@@ -12,12 +12,12 @@ import {
   VM,
 } from "@earendil-works/gondolin";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { GUEST_WORKSPACE, protectPiCredentials } from "./paths.ts";
+import { GUEST_WORKSPACE, HOST_PI_DIR, protectPiCredentials } from "./paths.ts";
 import { parseEnvironment } from "./shell.ts";
 
 const EXTENSION_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const LIBRARIAN_CACHE_DIR = path.join(process.env.HOME ?? "", ".cache", "checkouts");
-export const HOST_PI_DIR = path.join(process.env.HOME ?? "", ".pi");
+export { HOST_PI_DIR } from "./paths.ts";
 const HOST_PNPM_STORE_DIR = path.join(process.env.HOME ?? "", ".local", "share", "pnpm");
 
 const OCI_IMAGE = "pi-gondolin-rootfs:latest";
