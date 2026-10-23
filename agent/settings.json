@@ -1,5 +1,5 @@
 {
-  "lastChangelogVersion": "1.3.0",
+  "lastChangelogVersion": "1.4.0",
   "theme": "dark",
   "npmCommand": [
     "pnpm"
@@ -20,6 +20,8 @@
   "steeringMode": "all",
   "followUpMode": "all",
   "defaultThinkingLevel": "high",
-  "defaultTools": ["+codemode"],
+  "defaultTools": [
+    "+codemode"
+  ],
   "hideThinkingBlock": false
 }

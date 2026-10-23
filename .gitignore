@@ -1,7 +1,9 @@
 /agent/npm
+!/agent/npm/pnpm-workspace.yaml
 /agent/sessions
 /agent/auth.json
+/agent/trust.json
 /agent/models-store.json
-/agent/account-switcher.json
+/web-search-cache
 
 node_modules

@@ -1,0 +1,5 @@
+publicHoistPattern:
+  - "*"
+allowBuilds:
+  "@google/genai": true
+  protobufjs: true
