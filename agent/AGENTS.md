@@ -22,7 +22,7 @@ Before sending a reply, draft and red pen:
 
 - Check: no preamble, no recap, no closing pleasantries.
 - Check for missing prepositions.
-- Keep the reply brief
+- Keep the reply brief, but not short
   - Structure the reply as a set of short, crisp paragraphs.
-  - If a result depends on detailed analysis, put those in an Appendix section.
+  - If a result depends on analysis, put the analysis in Appendix sections.
   - Prefer writing with headings only, which can be expanded when asked.
