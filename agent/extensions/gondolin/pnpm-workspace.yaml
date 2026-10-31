@@ -1,10 +1,8 @@
 allowBuilds:
-  "@google/genai": false
+  '@google/genai': true
   cpu-features: true
-  protobufjs: false
+  protobufjs: true
   ssh2: true
-  tree-sitter-bash: true
-  zeromq: true
 minimumReleaseAge: 0
 patchedDependencies:
   "@earendil-works/gondolin": patches/@earendil-works__gondolin.patch
