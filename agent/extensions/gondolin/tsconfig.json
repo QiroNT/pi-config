@@ -6,8 +6,13 @@
     "noEmit": true,
     "skipLibCheck": true,
     "strict": true,
-    "target": "ES2023",
-    "types": ["node"]
+    "target": "ESNext",
+    "types": [
+      "node"
+    ]
   },
-  "include": ["index.ts", "src/**/*.ts"]
+  "include": [
+    "index.ts",
+    "src/**/*.ts"
+  ]
 }

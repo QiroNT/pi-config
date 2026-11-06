@@ -1,5 +1,5 @@
 {
-  "lastChangelogVersion": "1.4.0",
+  "lastChangelogVersion": "1.5.0",
   "theme": "dark",
   "npmCommand": [
     "pnpm"
@@ -14,8 +14,8 @@
     "npm:@firstpick/pi-extension-stats",
     "npm:@firstpick/pi-utils"
   ],
-  "defaultProvider": "deepseek",
-  "defaultModel": "deepseek-flash",
+  "defaultProvider": "magpie",
+  "defaultModel": "deepseek/deepseek-flash",
   "enableInstallTelemetry": false,
   "steeringMode": "all",
   "followUpMode": "all",
@@ -23,5 +23,10 @@
   "defaultTools": [
     "+codemode"
   ],
-  "hideThinkingBlock": false
+  "hideThinkingBlock": false,
+  "extensionChangelogVersions": {
+    "{\"source\":\"npm:pi-web-access\",\"scope\":\"user\"}": "0.47.0",
+    "{\"source\":\"npm:@tintinweb/pi-subagents\",\"scope\":\"user\"}": "0.23.1",
+    "{\"source\":\"npm:@narumitw/pi-usage\",\"scope\":\"user\"}": "0.69.2"
+  }
 }
