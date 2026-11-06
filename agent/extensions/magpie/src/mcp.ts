@@ -1,14 +1,8 @@
 /**
- * magpie's MCP servers as Pi's.
- *
- * Two sources, both on the gateway:
- *   - the router, /mcp/magpie/hub/<agent>: one server that reaches every
- *     server the Library holds for that agent;
- *   - magpie's own, GET /v1/magpie/mcp: web search, vision, images and the
- *     plugin tools, each its own endpoint.
- *
- * Registrations are per session and unsaved, so this runs on every start and
- * after every toggle.
+ * magpie's MCP servers as Pi's, from two sources: the router (one server for
+ * all of the Library's servers for the agent) and magpie's own (one endpoint
+ * each). Registrations are per session and unsaved, so this is run on every
+ * start and toggle.
  */
 
 import type { ExtensionAPI, McpServerConfig } from "@earendil-works/pi-coding-agent";
@@ -18,7 +12,7 @@ import { getJSON, type Gateway } from "./gateway.ts";
 export const HUB_SERVER_NAME = "magpie";
 export const HUB_AGENT = "pi";
 export const OWN_MCP_PATH = "/v1/magpie/mcp";
-/** As `GET /v1` lists it; the router is asked per agent. */
+/** As listed by `GET /v1`, with the agent unfilled. */
 export const HUB_MCP_PATH = "/mcp/magpie/hub/{agent}";
 
 export interface OwnMcpServer {
@@ -53,8 +47,7 @@ export function ownConfig(gateway: Gateway, server: OwnMcpServer, exposure: McpE
 }
 
 /**
- * Register what the toggles name, unregister the rest; idempotent: a server
- * whose config has not changed is left alone, so its connection is too.
+ * Safe to call again: a server with an unchanged config is left connected.
  */
 export async function syncMcp(
   pi: ExtensionAPI,
@@ -69,7 +62,7 @@ export async function syncMcp(
     desired.set(HUB_SERVER_NAME, hubConfig(gateway, wanted.exposure));
   }
 
-  // an older magpie serves neither route: the catalog of paths says which
+  // neither route may be served by an older magpie
   if (wanted.own && wanted.offers(OWN_MCP_PATH)) {
     for (const server of await fetchOwnServers(gateway, signal)) {
       if (server.name === HUB_SERVER_NAME) continue;
@@ -93,13 +86,16 @@ export async function syncMcp(
   }
 }
 
-/** Forget everything (the master switch going off, or a gateway change). */
+/**
+ * Every registration is dropped when there is no gateway, when no MCP toggle
+ * is on, when a sync failed, or when the session has ended.
+ */
 export function unregisterMcp(pi: ExtensionAPI, registered: Map<string, string>): void {
   for (const name of [...registered.keys()]) {
     try {
       pi.unregisterMcpServer(name);
     } catch {
-      // already gone: the session ended under us
+      // already gone, since the session was closed first
     }
   }
   registered.clear();

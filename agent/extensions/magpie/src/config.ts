@@ -1,8 +1,6 @@
 /**
- * magpie.json: the extension's own settings.
- *
- * Toggles only — the gateway URL and key live in Pi's auth store, written by
- * `/login`. Nothing here is a secret, so the file is safe to copy around.
+ * magpie.json: toggles only. The gateway URL and key are stored in Pi's auth
+ * store, written by `/login`.
  */
 
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
@@ -69,12 +67,10 @@ export const DEFAULT_FEATURES: Features = {
 
 export type McpExposure = "codemode" | "deferred" | "direct";
 
-/** Read an exposure name, falling back to the default for anything else. */
 export function exposureOf(value: unknown): McpExposure {
   return value === "deferred" || value === "direct" ? value : "codemode";
 }
 
-/** Every toggle at once: what `/magpie on` and `/magpie off` mean. */
 export function allFeatures(on: boolean): Features {
   const features: Features = { ...DEFAULT_FEATURES };
   for (const name of FEATURES) features[name] = on;
@@ -95,7 +91,7 @@ export const DEFAULT_CONFIG: MagpieConfig = {
   exposure: "codemode",
 };
 
-/** Pi's agent directory: PI_CODING_AGENT_DIR, else ~/.pi/agent. */
+/** PI_CODING_AGENT_DIR (a leading ~ is expanded), else ~/.pi/agent. */
 export function agentDir(): string {
   const configured = process.env.PI_CODING_AGENT_DIR?.trim();
   if (configured) {
@@ -110,7 +106,6 @@ export function configPath(): string {
   return path.join(agentDir(), "magpie.json");
 }
 
-/** The models a registered provider is worth: chat, classifier or image. */
 export function modelFeaturesOn(features: Features): boolean {
   return features.catalog || features.systemone || features.images;
 }
@@ -123,7 +118,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-/** Read the file, keeping unknown keys and filling in what it lacks. */
+/**
+ * Unknown keys are kept. Defaults are used when the file is missing or
+ * unparseable, or when statuslineSeconds is under 5.
+ */
 export function readConfig(): MagpieConfig {
   let raw: Record<string, unknown>;
   try {
@@ -150,7 +148,10 @@ export function readConfig(): MagpieConfig {
   };
 }
 
-/** Write through a temporary file, so a crash never leaves half a config. */
+/**
+ * A temp file is written and then renamed, so no half-written config is left
+ * after a crash.
+ */
 export function writeConfig(config: MagpieConfig): void {
   const file = configPath();
   mkdirSync(path.dirname(file), { recursive: true });

@@ -1,9 +1,6 @@
 /**
- * `/magpie` and its arguments: the settings screen, the status, a catalog
- * refresh, the last route, and the one-line switch.
- *
- * The command reads the extension's state through `options` rather than
- * holding it, so the config it acts on is the one the screen last saved.
+ * `/magpie` and its arguments. State is read through `options` on each call,
+ * so the config acted on is the one last saved from the settings screen.
  */
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
@@ -15,20 +12,14 @@ import { openSettings } from "./ui.ts";
 const TIMEOUT_MS = 10_000;
 
 export interface CommandOptions {
-  /** The toggles as they stand: the screen changes them mid-session. */
   config: () => MagpieConfig;
-  /** What the gateway said of itself, for the version. */
   info: () => GatewayInfo;
-  /** The credential `/login` stored, as the gateway it names. */
   connect: (ctx: ExtensionContext) => Promise<Gateway | null>;
-  /** Save a config and make the change visible: provider, MCP servers, poll. */
   apply: (next: MagpieConfig, ctx: ExtensionContext) => Promise<void>;
-  /** Ask the catalog again; answers with how many models magpie now offers. */
   refresh: (ctx: ExtensionContext) => Promise<number>;
 }
 
 export function registerMagpieCommand(pi: ExtensionAPI, options: CommandOptions): void {
-  /** The gateway as a few lines: the status, and the settings screen's row. */
   async function statusLines(ctx: ExtensionContext): Promise<string[]> {
     const current = await options.connect(ctx);
     if (!current) return ["magpie: not signed in — run `/login` and choose magpie gateway"];
@@ -36,7 +27,7 @@ export function registerMagpieCommand(pi: ExtensionAPI, options: CommandOptions)
     const info = options.info();
     const lines = [`gateway: ${current.url}${info.version ? ` (magpie ${info.version})` : ""}`];
 
-    // each of these is optional: a read that fails contributes nothing
+    // optional reads: when one fails, nothing is added
     const id = ctx.sessionManager.getSessionId();
     const status = await fetchStatusline(current, id, AbortSignal.timeout(TIMEOUT_MS)).catch(() => null);
     if (status?.text) lines.push(status.text);
@@ -100,7 +91,7 @@ export function registerMagpieCommand(pi: ExtensionAPI, options: CommandOptions)
 
         case "on":
         case "off": {
-          // on is the defaults, off is nothing: a switch, not a diff
+          // defaults are set by "on"; every feature is disabled by "off"
           const enabled = command === "on";
           const next: MagpieConfig = {
             ...options.config(),
@@ -118,7 +109,6 @@ export function registerMagpieCommand(pi: ExtensionAPI, options: CommandOptions)
   });
 }
 
-/** A multi-line status belongs in the transcript, not in a toast. */
 function showStatus(pi: ExtensionAPI, lines: string[]): void {
   pi.sendMessage({ customType: "magpie-status", content: lines.join("\n"), display: true });
 }
@@ -134,7 +124,7 @@ function describeRoute(route: Awaited<ReturnType<typeof fetchRoute>>): string {
     return `${attempt.model ?? "?"}${attempt.effort ? `/${attempt.effort}` : ""}${status}${done}`;
   });
 
-  // the route command is the fuller answer: it keeps the effort the footer omits
+  // the effort is kept here, since it is left out of the footer
   const effort = hit.effort || hit.askedEffort;
 
   return [`magpie ${line ?? hit.asked ?? "?"}${effort ? ` · ${effort}` : ""}`, tries.length ? `tries: ${tries.join(", ")}` : ""]

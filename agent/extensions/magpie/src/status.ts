@@ -1,10 +1,6 @@
 /**
- * The extension's own reads of the gateway: the status line magpie would
- * draw for Pi, each account's quota windows, and where the last turn went.
- *
- * All three answer this machine, or another only when magpie is shared on
- * the local network and the request carries its key — so a 403 here means
- * "turn this toggle off", not "retry".
+ * The extension's reads of the gateway: status line, quotas and last route.
+ * A 403 is a sign to turn the toggle off, not a reason to retry the call.
  */
 
 import { getJSON, type Gateway } from "./gateway.ts";
@@ -15,6 +11,9 @@ export const ROUTE_PATH = "/v1/magpie/route";
 
 export interface StatuslineAnswer {
   text?: string;
+  model?: string;
+  /** The accounts shown on the line; empty when no window is found for any. */
+  accounts?: unknown[];
 }
 
 export interface QuotaCard {
@@ -42,9 +41,8 @@ export interface RouteAnswer {
 }
 
 /**
- * The single line magpie draws, plus the model that served the last turn.
- * `only` keeps the accounts named — the provider of the model in use, say —
- * as `magpie statusline claude` does; the model part stays either way.
+ * The line shown by magpie, and the model that served the last turn. Accounts
+ * are limited by `only`; the model is always included.
  */
 export async function fetchStatusline(
   gateway: Gateway,
@@ -63,42 +61,51 @@ export async function fetchRoute(gateway: Gateway, session: string, signal?: Abo
   return getJSON<RouteAnswer>(gateway, `${ROUTE_PATH}?session=${encodeURIComponent(session)}`, signal);
 }
 
-/**
- * One line per account, in magpie's own style (`claude a@x.com 5h 62%
- * 7d 41%`: no colon after the name), for `/magpie status`.
- */
+/** One line per account, in magpie's style: no colon after the name. */
 export async function fetchQuotaLines(gateway: Gateway, signal?: AbortSignal): Promise<string[]> {
-  const answer = await getJSON<{ data?: QuotaCard[] }>(gateway, `${QUOTAS_PATH}?kept=1`, signal);
-  const cards = answer.data ?? [];
-
-  const lines: string[] = [];
-  for (const card of cards) {
-    const name = card.name ?? card.provider ?? "account";
-    if (card.error) {
-      lines.push(`${name} ${card.error}`);
-      continue;
-    }
-
-    const parts: string[] = [];
-    for (const window of card.windows ?? []) {
-      const label = window.name ?? "";
-      const value = window.display ?? (window.unlimited ? "unlimited" : "");
-      if (label || value) parts.push([label, value].filter(Boolean).join(" "));
-    }
-    if (card.balance) parts.push(card.balance);
-
-    lines.push(parts.length ? `${name} ${parts.join(" · ")}` : name);
-  }
-
-  return lines;
+  const cards = await fetchQuotaCards(gateway, signal);
+  return cards.map(quotaLine);
 }
 
 /**
- * The routing line: what answered, and how it was asked.
- *
- * `already` is what the row says before this part — the status line, when it
- * is on. A model named there is not named twice. The effort is left out: Pi's
- * own footer shows the one in use, so the row keeps only what it cannot see.
+ * Null when no account matches. Used for balance-paid accounts, which are
+ * left out of the status line.
+ */
+export async function fetchAccountLine(
+  gateway: Gateway,
+  provider: string,
+  signal?: AbortSignal,
+): Promise<string | null> {
+  const cards = await fetchQuotaCards(gateway, signal);
+  const wanted = provider.toLowerCase();
+  const card = cards.find((card) => (card.provider ?? "").toLowerCase() === wanted);
+  return card ? quotaLine(card) : null;
+}
+
+/** Only accounts kept by the gateway are asked for (`kept=1`). */
+async function fetchQuotaCards(gateway: Gateway, signal?: AbortSignal): Promise<QuotaCard[]> {
+  const answer = await getJSON<{ data?: QuotaCard[] }>(gateway, `${QUOTAS_PATH}?kept=1`, signal);
+  return answer.data ?? [];
+}
+
+function quotaLine(card: QuotaCard): string {
+  const name = card.name ?? card.provider ?? "account";
+  if (card.error) return `${name} ${card.error}`;
+
+  const parts: string[] = [];
+  for (const window of card.windows ?? []) {
+    const label = window.name ?? "";
+    const value = window.display ?? (window.unlimited ? "unlimited" : "");
+    if (label || value) parts.push([label, value].filter(Boolean).join(" "));
+  }
+  if (card.balance) parts.push(card.balance);
+
+  return parts.length ? `${name} ${parts.join(" · ")}` : name;
+}
+
+/**
+ * `already` is the text before this part; a model named in it is not
+ * repeated. The effort is left out, since it is shown in Pi's footer.
  */
 export function routeLine(route: RouteAnswer | null, already = ""): string | null {
   const hit = route?.route;

@@ -1,10 +1,6 @@
 /**
- * The gateway base and credential, and the two ways to get them:
- * from Pi's stored credential (the extension's own requests) or from a
- * refresh context (the catalog fetch).
- *
- * The credential is written by `/login` into Pi's auth store; the URL rides
- * there in the credential's `env`, so magpie.json holds toggles only.
+ * The gateway base and key. The URL is stored in the credential's env, so
+ * only toggles are saved in magpie.json.
  */
 
 import type { Credential } from "@earendil-works/pi-ai";
@@ -14,36 +10,37 @@ import { PROVIDER_ID } from "./config.ts";
 export const USER_AGENT = "pi-magpie-extension/0.1 (pi)";
 
 /**
- * `GET /v1`'s answer: the version, and the paths this magpie serves. The list
- * is how a build that predates a route says so — asking anyway would be a
- * 404 dressed up as a failure.
+ * `GET /v1`. A route is left out of `apis` by an older build, so asking for
+ * it would only get a 404.
  */
 export interface GatewayInfo {
   version: string;
   apis: string[] | null;
-  /** Whether the router has a server to give; undefined when not told. */
+  /** undefined when not reported. */
   mcpHub: boolean | undefined;
 }
 
 export const NO_INFO: GatewayInfo = { version: "", apis: null, mcpHub: undefined };
 
-/** Whether this magpie offers a path; unknown (an old answer) means try it. */
+/**
+ * Whether a path is offered by this magpie. If the answer is unknown (an
+ * old build), the path is tried.
+ */
 export function offers(info: GatewayInfo, path: string): boolean {
   if (!info.apis || info.apis.length === 0) return true;
   return info.apis.includes(path);
 }
 
 export interface Gateway {
-  /** The gateway as the user typed it, without a trailing slash. */
   url: string;
-  /** For chat, Responses, images, systemone and everything else under /v1. */
+  /** Everything under /v1 except Messages. */
   v1: string;
-  /** The root, which is what Anthropic's Messages API is asked at. */
+  /** Messages is asked here, since /v1 is added by Anthropic's SDK. */
   root: string;
   key: string;
 }
 
-/** Trim, drop trailing slashes, add a scheme when one is missing. */
+/** http:// is added to a host with no scheme. */
 export function normalizeUrl(raw: string): string {
   let url = raw.trim();
   if (!url) return "";
@@ -57,7 +54,6 @@ export function gatewayOf(url: string, key: string): Gateway | null {
   return { url: normalized, v1: `${normalized}/v1`, root: normalized, key };
 }
 
-/** The credential `/login` stored, as the gateway it names. */
 export async function gatewayFor(ctx: ExtensionContext): Promise<Gateway | null> {
   try {
     const auth = await ctx.modelRegistry.getProviderAuth(PROVIDER_ID);
@@ -69,7 +65,7 @@ export async function gatewayFor(ctx: ExtensionContext): Promise<Gateway | null>
   }
 }
 
-/** The same, for a catalog refresh, which hands the credential to the provider. */
+/** For a catalog refresh, where the credential is handed in directly. */
 export function gatewayFromCredential(credential: Credential | undefined): Gateway | null {
   if (!credential || credential.type !== "api_key") return null;
   return gatewayOf(credential.env?.MAGPIE_URL ?? "", credential.key ?? "");
@@ -90,7 +86,9 @@ export class GatewayError extends Error {
   }
 }
 
-/** GET a gateway path as JSON, with the error magpie wrote kept in the message. */
+/**
+ * The error text sent back by magpie is included in the thrown message.
+ */
 export async function getJSON<T>(gateway: Gateway, path: string, signal?: AbortSignal): Promise<T> {
   const response = await fetch(`${gateway.url}${path}`, { headers: headersOf(gateway), signal });
   const body = await response.text();
@@ -99,7 +97,7 @@ export async function getJSON<T>(gateway: Gateway, path: string, signal?: AbortS
     try {
       reason = JSON.parse(body)?.error ?? reason;
     } catch {
-      // not JSON: the body is the reason
+      // not JSON: use the raw body as the reason
     }
     throw new GatewayError(response.status, reason || `magpie answered ${response.status}`);
   }

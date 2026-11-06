@@ -1,7 +1,4 @@
-/**
- * `/magpie`: the toggles, drawn with the same list component Pi's own
- * `/settings` uses, so it moves and toggles the same way.
- */
+/** The /magpie screen, built on the same SettingsList as Pi's /settings. */
 
 import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
 import {
@@ -16,12 +13,10 @@ import { exposureOf, FEATURES, FEATURE_HELP, FEATURE_LABELS, type MagpieConfig }
 
 export interface ScreenOptions {
   config: MagpieConfig;
-  /** The gateway the credential names, or "" when not signed in. */
+  /** "" when not signed in. */
   gateway: string;
   version?: string;
-  /** Called after every change, with the config to save and apply. */
   onChange: (next: MagpieConfig) => Promise<void> | void;
-  /** Rows that act instead of toggling; they return the line to show. */
   onAction: (action: "refresh" | "status") => Promise<string>;
 }
 
@@ -106,7 +101,7 @@ export async function openSettings(ctx: ExtensionContext, options: ScreenOptions
     const config: MagpieConfig = { ...options.config, features: { ...options.config.features } };
     const items = itemsOf(config, options.gateway, options.version);
 
-    /** Save and apply the screen's config; a failure is told, not thrown at nobody. */
+    /** A failed save is shown as a warning, since no caller waits for it. */
     const change = (): void => {
       void Promise.resolve()
         .then(() => options.onChange({ ...config, features: { ...config.features } }))

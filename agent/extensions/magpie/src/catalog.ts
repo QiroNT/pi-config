@@ -1,11 +1,7 @@
 /**
- * /v1/models → Pi models.
- *
- * One call answers everything when the headers are sent: `X-Magpie-Deciders`
- * adds the decision models, `X-Magpie-Drawers` the image models, and
- * `X-Magpie-Prices` each chat model's price. The rows carry the model's own
- * thinking levels, window, modalities and the APIs magpie would relay it on
- * as it is, which is what picks the Pi API per model.
+ * /v1/models → Pi models. Decision models, image models and prices are added
+ * when the X-Magpie-* headers are sent. A row's Pi API is picked from its
+ * native_endpoints, since each model is forwarded as it is.
  */
 
 import type {
@@ -25,12 +21,10 @@ import { headersOf, type Gateway } from "./gateway.ts";
 export const IMAGE_API = "magpie-images";
 export const CLASSIFIER_API = "typesafe-system-one";
 
-/** Pi's thinking levels, and the vendor words that mean each of them. */
 const LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
 
 const ZERO_COST = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
 
-/** One row of the gateway's list, as this extension reads it. */
 export interface CatalogRow {
   id: string;
   kind?: string;
@@ -53,7 +47,6 @@ export interface CatalogOptions {
   classifier: boolean;
 }
 
-/** Vendor words for each of Pi's levels. */
 const ALIASES: Record<string, string> = {
   off: "off", none: "off", disabled: "off",
   min: "minimal", minimal: "minimal",
@@ -64,14 +57,15 @@ const ALIASES: Record<string, string> = {
   max: "max", maximum: "max", ultra: "max",
 };
 
-/** The level names the row lists, in either of the two shapes it comes in. */
+// two shapes: reasoning_levels (strings) or
+// supported_reasoning_levels (objects)
 function names(row: CatalogRow): string[] {
   return row.reasoning_levels?.length
     ? row.reasoning_levels
     : (row.supported_reasoning_levels ?? []).map((level) => level.effort ?? "").filter(Boolean);
 }
 
-/** The model's levels as Pi's map: a level it lacks is null, and hidden. */
+/** A level missing from the model is set to null, so Pi hides it. */
 function thinkingLevelMap(row: CatalogRow): ThinkingLevelMap | undefined {
   const listed = names(row);
   if (!listed.length) return undefined;
@@ -91,7 +85,7 @@ function perMillion(perToken: string | undefined): number {
   return Number.isFinite(value) ? value * 1_000_000 : 0;
 }
 
-/** Pi's cost, which is USD per million tokens: magpie's own price is already that. */
+// magpie_price is already per million tokens; pricing is per token
 function costOf(row: CatalogRow): typeof ZERO_COST {
   const price = row.magpie_price;
   if (price) {
@@ -114,7 +108,10 @@ function costOf(row: CatalogRow): typeof ZERO_COST {
   return { ...ZERO_COST };
 }
 
-/** magpie's rule, mirrored: which cache lifetimes Pi should keep warm. */
+/**
+ * Copied from magpie's rule for which models are given a prompt cache, and
+ * for how long (seconds).
+ */
 function promptCacheFor(api: string, id: string): { short: number; long?: number } | undefined {
   const name = id.slice(id.lastIndexOf("/") + 1).toLowerCase();
   if (api === "anthropic-messages" && name.startsWith("claude")) return { short: 300, long: 3600 };
@@ -122,10 +119,9 @@ function promptCacheFor(api: string, id: string): { short: number; long?: number
   return undefined;
 }
 
-/** The API magpie relays a model on as it is; Chat is the fallback. */
 function apiOf(row: CatalogRow): { api: string; atRoot: boolean } {
   const endpoints = row.native_endpoints ?? [];
-  // Anthropic's SDK adds the /v1 itself, so Messages is asked at the root
+  // /v1 is added by Anthropic's SDK itself, so Messages is asked at the root
   if (endpoints.includes("/v1/messages")) return { api: "anthropic-messages", atRoot: true };
   if (endpoints.includes("/v1/responses")) return { api: "openai-responses", atRoot: false };
   return { api: "openai-completions", atRoot: false };
@@ -156,8 +152,8 @@ function chatModel(row: CatalogRow, gateway: Gateway, features: Features): Model
 
   if (features.thinkingLevels) {
     const levels = thinkingLevelMap(row);
-    // a Claude on Messages takes thinking disabled as Pi's off; another
-    // vendor's model there always thinks, and has no off to offer
+    // On Messages, "off" is thinking disabled for a Claude model, so a null
+    // off is dropped. Thinking is always on for other models there.
     if (levels && api === "anthropic-messages" && row.id.toLowerCase().includes("claude") && levels.off === null) {
       delete levels.off;
     }
@@ -167,8 +163,7 @@ function chatModel(row: CatalogRow, gateway: Gateway, features: Features): Model
   const cache = promptCacheFor(api, row.id);
   if (cache) model.promptCache = cache;
 
-  // a strict tool of a Responses turn that leaves a property out is read as
-  // strict-mode schema by magpie, which is what pi-ai says with this
+  // A Responses tool missing a property is read as strict-mode schema
   if (api === "openai-responses") model.compat = { supportsStrictMode: true };
 
   return model;
@@ -202,7 +197,6 @@ function classifierModel(row: CatalogRow, gateway: Gateway, features: Features):
   };
 }
 
-/** The catalog as Pi models, filtered by the toggles that are on. */
 export function toPiModels(rows: CatalogRow[], gateway: Gateway, features: Features, options: CatalogOptions): AnyModel[] {
   const models: AnyModel[] = [];
   for (const row of rows) {
@@ -215,7 +209,7 @@ export function toPiModels(rows: CatalogRow[], gateway: Gateway, features: Featu
         if (features.systemone && options.classifier) models.push(classifierModel(row, gateway, features));
         break;
       case "video":
-        // Pi has no video model to hand it to
+        // No video model exists in Pi, so these are skipped
         break;
       default:
         if (features.catalog) models.push(chatModel(row, gateway, features));
@@ -224,7 +218,6 @@ export function toPiModels(rows: CatalogRow[], gateway: Gateway, features: Featu
   return models;
 }
 
-/** One call, every kind: what `fetchModels` needs. */
 export async function fetchCatalog(
   gateway: Gateway,
   features: Features,

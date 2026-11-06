@@ -1,17 +1,14 @@
 /**
- * The footer: magpie's status line, and where the last turn went.
- *
- * Nothing here runs unless the current model is magpie's: a footer about
- * magpie in a conversation with another provider is just noise.
- *
- * While it does run, every failure is shown in its own few words, so an
- * empty row means "the toggle is off", not "the request failed".
+ * magpie's status line and last-route row. Nothing is drawn unless the current
+ * model is magpie's. A failure is shown in a few words, so an empty row is read
+ * as a toggle that is off, not as a failed request.
  */
 
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { Features } from "./config.ts";
 import type { Gateway } from "./gateway.ts";
 import {
+  fetchAccountLine,
   fetchRoute,
   fetchStatusline,
   ROUTE_PATH,
@@ -21,38 +18,28 @@ import {
 } from "./status.ts";
 
 const TIMEOUT_MS = 10_000;
-/** No closer than this between a turn starting and a redraw. */
 const TURN_MS = 3_000;
 
-/** Reads the gateway refused once: stop asking, quietly, until `start` runs again. */
+/** After a 403, that read is not repeated until `start` is called again. */
 interface Refused {
   statusline: boolean;
   route: boolean;
 }
 
 export interface FooterOptions {
-  /** The toggles as they apply now. */
   features: () => Features;
-  /** Seconds between polls. */
   seconds: () => number;
-  /** The gateway as currently known, or null before `/login`. */
   gateway: () => Gateway | null;
-  /** Ask again for the credential and the gateway. */
   connect: (ctx: ExtensionContext) => Promise<Gateway | null>;
-  /** Whether the model in use is magpie's: the footer is about that model. */
   onMagpie: () => boolean;
-  /** Whether this magpie serves a path: an old build is missing some. */
   offers: (path: string) => boolean;
-  /** The provider the model in use belongs to, if its id names one. */
   vendor: () => string | undefined;
 }
 
 export interface Footer {
-  /** Begin polling: the interval, plus one read now. */
   start(ctx: ExtensionContext): void;
-  /** One read, unless the last one was moments ago: a turn is starting. */
+  /** A redraw, unless one was made within TURN_MS. */
   drawSoon(): void;
-  /** Stop polling and take the row away. */
   stop(ctx?: ExtensionContext): void;
 }
 
@@ -68,18 +55,17 @@ export function createFooter(options: FooterOptions): Footer {
     return features.statusline || features.route;
   };
 
-  /** A draw nobody awaits: it must never end as an unhandled rejection. */
+  // nobody awaits this, so catch any error here
   function redraw(): void {
     draw().catch(() => undefined);
   }
 
   async function draw(): Promise<void> {
-    // the context this draw belongs to: stop() and start() replace `ctx`
-    // while a read is in flight, and a replaced context must not be drawn on
+    // `ctx` may be swapped mid-read by stop() or start(); skip the old one
     const target = ctx;
     if (!target || drawing) return;
 
-    // another provider is answering: magpie's footer has nothing to add
+    // the row is cleared when the model is not magpie's
     if (!options.onMagpie()) {
       target.ui.setStatus("magpie", undefined);
       return;
@@ -87,7 +73,7 @@ export function createFooter(options: FooterOptions): Footer {
 
     drawing = true;
     try {
-      // signed in since the last read: /login writes the credential mid-session
+      // the credential may be added mid-session by /login: look again if none
       const current = options.gateway() ?? (await options.connect(target));
       if (ctx !== target) return;
 
@@ -115,19 +101,26 @@ export function createFooter(options: FooterOptions): Footer {
       ]);
       if (ctx !== target) return;
 
-      // one footer row, assembled from what answered: the status line and the
-      // route. A part that is off contributes nothing; a part that failed
-      // says so in its own few words. A read the gateway refused once is not
-      // asked again, and the row keeps saying why it is empty.
+      // parts: the status line and the route. An off part is left out.
+      // A failed part is given its reason. Refused reads are not retried.
       const parts: string[] = [];
 
       const statusText = settled(status, () => undefined);
+
+      // no windows exist for a balance-paid account, so only the model is shown
+      // on magpie's line; that account's own line is appended.
+      let statusLine = statusText?.text ?? "";
+      if (statusText && !statusText.accounts?.length && vendor) {
+        const account = await quietly(() => fetchAccountLine(current, vendor, timeout));
+        if (ctx !== target) return;
+        if (account) statusLine = statusLine ? `${statusLine} | ${account}` : account;
+      }
+
       if (refused.statusline) parts.push("status line refused (403)");
-      else if (statusText?.text) parts.push(statusText.text);
+      else if (statusLine) parts.push(statusLine);
       else parts.push(...failureOf("status line", status));
       if (status.status === "rejected") refused.statusline = statusOf(status.reason) === 403;
 
-      // what the row already says, so the route part does not say it again
       const already = parts.join(" · ");
 
       const line = settled<RouteAnswer | null, null>(route, () => null);
@@ -152,7 +145,7 @@ export function createFooter(options: FooterOptions): Footer {
 
       if (timer) clearInterval(timer);
       timer = undefined;
-      // a toggle, a refresh or a new login is the user asking again
+      // refused reads are cleared when the user toggles, refreshes or logs in
       refused.statusline = refused.route = false;
 
       if (!wanted() || !options.onMagpie()) {
@@ -179,7 +172,15 @@ export function createFooter(options: FooterOptions): Footer {
   };
 }
 
-/** What to say about a part that has nothing to show, in a few words. */
+/** Null is returned on failure instead of throwing. */
+async function quietly<T>(read: () => Promise<T | null>): Promise<T | null> {
+  try {
+    return await read();
+  } catch {
+    return null;
+  }
+}
+
 function failureOf(label: string, result: PromiseSettledResult<unknown>): string[] {
   if (result.status !== "rejected") return [];
 
@@ -191,7 +192,6 @@ function failureOf(label: string, result: PromiseSettledResult<unknown>): string
   return [`${label} ${/timeout|abort/i.test(message) ? "timed out" : "unreachable"}`];
 }
 
-/** A settled read, or a fallback: the promise's outcome never reaches the footer. */
 function settled<T, F>(result: PromiseSettledResult<T | undefined>, fallback: () => F): T | F {
   if (result.status === "rejected") return fallback();
   return result.value === undefined ? fallback() : result.value;

@@ -1,13 +1,10 @@
 /**
- * magpie, for Pi, over HTTP.
+ * magpie for Pi, over HTTP. Providers, MCP servers and headers are registered
+ * at runtime from the gateway's API. The Library's instructions and the
+ * per-agent model scope can't be set over HTTP, so they are kept in Pi's files.
  *
- * Everything magpie would write into Pi's files — the provider, the extra
- * model kinds, the session headers — is done here at runtime instead, from
- * the gateway's own API. What it cannot do over HTTP (the Library's
- * instructions, the per-agent model scope) it leaves to Pi's own files.
- *
- * The gateway URL and key come from `/login magpie`; this extension's file,
- * ~/.pi/agent/magpie.json, holds the toggles only.
+ * The URL and key come from `/login magpie`; only toggles are saved in
+ * magpie.json.
  */
 
 import type { ProviderClassifier } from "@earendil-works/pi-ai";
@@ -38,19 +35,17 @@ export default async function magpie(pi: ExtensionAPI): Promise<void> {
   let session: ExtensionContext | undefined;
   const mcpRegistered = new Map<string, string>();
 
-  /** Whether this magpie serves a path, per its own `/v1` answer. */
   const serves = (path: string): boolean => offers(info, path);
 
-  /** The toggles as they apply here: no decisions on a Pi without classifiers. */
+  /** Classifier models are off where classifiers are not supported. */
   const features = (): Features => ({
     ...config.features,
     systemone: config.features.systemone && Boolean(classifier),
   });
 
   /**
-   * Register the provider with magpie's catalog. `fetchModels` reads the
-   * toggles and the credential on every refresh, so a change needs no
-   * re-registration.
+   * Safe to call again. Toggles and credential are read on every refresh, so
+   * no re-registration is needed for a change.
    */
   function registerProvider(): void {
     if (registered) return;
@@ -64,7 +59,6 @@ export default async function magpie(pi: ExtensionAPI): Promise<void> {
     registered = false;
   }
 
-  /** Save, then make the change visible: provider, MCP servers, poll. */
   async function apply(next: MagpieConfig, ctx: ExtensionContext | undefined): Promise<void> {
     config = next;
     writeConfig(config);
@@ -83,7 +77,7 @@ export default async function magpie(pi: ExtensionAPI): Promise<void> {
     }
   }
 
-  /** The credential `/login` stored, as the gateway it names. */
+  /** `/v1` is asked once, and again only while no answer has come back. */
   async function connect(ctx: ExtensionContext): Promise<Gateway | null> {
     gateway = await gatewayFor(ctx);
     if (!gateway) {
@@ -109,12 +103,10 @@ export default async function magpie(pi: ExtensionAPI): Promise<void> {
     return gateway;
   }
 
-  /** magpie's MCP servers, or none: registrations do not outlive the session. */
   async function syncServers(ctx: ExtensionContext): Promise<void> {
     const current = gateway ?? (await connect(ctx));
     const wanted = {
-      // the router says whether it has anything to give; an older answer
-      // (undefined) is worth registering and finding out
+      // undefined (not reported) still gets tried
       hub: config.features.mcpHub && info.mcpHub !== false,
       own: config.features.mcpServers,
       exposure: config.exposure,
@@ -129,7 +121,7 @@ export default async function magpie(pi: ExtensionAPI): Promise<void> {
     try {
       await syncMcp(pi, current, wanted, mcpRegistered, AbortSignal.timeout(TIMEOUT_MS));
     } catch {
-      // no magpie, no servers, no complaint: the tools are missing, not broken
+      // silent by design: a failure is shown as missing tools, not an error
       unregisterMcp(pi, mcpRegistered);
     }
   }
@@ -141,7 +133,7 @@ export default async function magpie(pi: ExtensionAPI): Promise<void> {
     connect,
     onMagpie: () => session?.model?.provider === PROVIDER_ID,
     offers: serves,
-    // "deepseek/deepseek-flash" belongs to deepseek; a bare id names nobody
+    // ids are written "vendor/model"; an id with no slash has no vendor
     vendor: () => {
       const id = session?.model?.id;
       const vendor = id?.includes("/") ? id.slice(0, id.indexOf("/")) : "";
@@ -149,7 +141,6 @@ export default async function magpie(pi: ExtensionAPI): Promise<void> {
     },
   });
 
-  /** Ask the catalog again, then make what it says visible everywhere. */
   async function refreshCatalog(ctx: ExtensionContext): Promise<number> {
     await connect(ctx);
     await ctx.modelRegistry.refresh({ signal: AbortSignal.timeout(TIMEOUT_MS) }).catch(() => undefined);
@@ -159,7 +150,6 @@ export default async function magpie(pi: ExtensionAPI): Promise<void> {
     return ctx.modelRegistry.getAll().filter((model) => model.provider === PROVIDER_ID).length;
   }
 
-  // register our provider
   if (modelFeaturesOn(config.features)) registerProvider();
 
   pi.on("session_start", async (_event, ctx) => {
@@ -178,16 +168,13 @@ export default async function magpie(pi: ExtensionAPI): Promise<void> {
   });
 
   pi.on("model_select", (_event, ctx) => {
-    // draw immediately on model switch
     footer.start(ctx);
   });
 
   pi.on("before_agent_start", () => {
-    // a new turn is a new chance for a footer that could not be drawn
     footer.drawSoon();
   });
 
-  // let magpie trace conversation
   pi.on("before_provider_headers", (event, ctx) => {
     if (!config.features.sessionAffinity) return;
     if (ctx.model?.provider !== PROVIDER_ID) return;
@@ -198,7 +185,6 @@ export default async function magpie(pi: ExtensionAPI): Promise<void> {
     event.headers["session_id"] = id;
   });
 
-  // the command
   registerMagpieCommand(pi, {
     config: () => config,
     info: () => info,
@@ -208,7 +194,10 @@ export default async function magpie(pi: ExtensionAPI): Promise<void> {
   });
 }
 
-/** magpie's decision models, when this Pi can take them. */
+/**
+ * Undefined when this Pi has no classifier support, or the import is
+ * unavailable.
+ */
 async function loadClassifier(): Promise<ProviderClassifier | undefined> {
   try {
     const module = await import("@earendil-works/pi-ai/providers/all");

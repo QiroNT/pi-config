@@ -18,7 +18,10 @@ import { parseEnvironment } from "./shell.ts";
 const EXTENSION_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const LIBRARIAN_CACHE_DIR = path.join(process.env.HOME ?? "", ".cache", "checkouts");
 export { HOST_PI_DIR } from "./paths.ts";
-const HOST_PNPM_STORE_DIR = path.join(process.env.HOME ?? "", ".local", "share", "pnpm");
+
+const PNPM_STORE_SUBPATH =
+  process.platform === "darwin" ? ["Library", "pnpm"] : [".local", "share", "pnpm"];
+const HOST_PNPM_STORE_DIR = path.join(process.env.HOME ?? "", ...PNPM_STORE_SUBPATH);
 
 const OCI_IMAGE = "pi-gondolin-rootfs:latest";
 const DEFAULT_IMAGE = "pi-gondolin:latest";

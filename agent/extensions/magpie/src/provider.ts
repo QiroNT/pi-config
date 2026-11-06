@@ -1,10 +1,6 @@
 /**
- * The provider: magpie's catalog as Pi models, with the credential `/login`
- * stores and nothing in magpie.json.
- *
- * Chat models are dispatched by the API their `native_endpoints` name, so
- * magpie relays a request instead of translating it; classifier and image
- * models carry their own API ids and go through the maps below.
+ * magpie's catalog as Pi models. Each chat model's Pi API is picked from its
+ * `native_endpoints`, so requests are forwarded rather than translated.
  */
 
 import {
@@ -25,11 +21,9 @@ import { gatewayFromCredential, gatewayOf, headersOf, normalizeUrl } from "./gat
 import { createDraw } from "./images.ts";
 
 export interface ProviderOptions {
-  /** The toggles as they stand; read on every refresh, so they can change. */
   features: () => Features;
-  /** Whether Pi here has classifier models to hand a decision to. */
   classifier: boolean;
-  /** magpie's decision models go to Pi's own System One implementation. */
+  /** Pi's own System One implementation, used for the decision models. */
   classify?: ProviderClassifier;
 }
 
@@ -55,8 +49,8 @@ export function buildProvider(options: ProviderOptions): Provider<Api> {
         const version = await verify(url, key);
         interaction.notify({ type: "info", message: `magpie ${version} at ${url} answers` });
 
-        // the URL rides in the credential's env, which is what ProviderEnv is
-        // for: one credential, both halves, nothing secret in magpie.json
+        // the URL is stored in the credential's env, so only toggles are saved
+        // in magpie.json
         return { type: "api_key", key, env: { MAGPIE_URL: url } };
       },
       async resolve(input): Promise<AuthResult | undefined> {
@@ -89,19 +83,21 @@ export function buildProvider(options: ProviderOptions): Provider<Api> {
     images: { "magpie-images": createDraw() },
     ...(options.classify ? { classifiers: { "typesafe-system-one": options.classify } } : {}),
     fetchModels: async (context: RefreshModelsContext): Promise<readonly AnyModel[]> => {
-      // no credential: nothing to offer, and the models go with it
+      // no credential, no models
       const gateway = gatewayFromCredential(context.credential);
       if (!gateway) return [];
 
-      // a gateway that is down must throw: what fetchModels returns replaces
-      // (and is persisted over) the list Pi last published, so `[]` would
-      // empty it. Pi keeps the restored list when this rejects.
+      // throw when the gateway is down, so the last list Pi saved is not
+      // replaced by an empty one
       return fetchCatalog(gateway, options.features(), { classifier: options.classifier }, context.signal);
     },
   });
 }
 
-/** GET /v1 then /v1/models: a wrong key or an unreachable host fails the login. */
+/**
+ * /v1 and /v1/models are both checked, so a wrong key or an unreachable host
+ * is reported at login.
+ */
 async function verify(url: string, key: string): Promise<string> {
   const gateway = gatewayOf(url, key);
   if (!gateway) throw new Error("no gateway URL: run `magpie serve` and give its address");

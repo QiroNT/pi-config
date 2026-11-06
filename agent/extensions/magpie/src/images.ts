@@ -1,8 +1,6 @@
 /**
- * magpie's images API, as Pi's image models: POST {gateway}/v1/images/generations.
- *
- * Adapted from the extension magpie writes for Pi itself (internal/agent/
- * pi_extension.ts): the same body, the same answer, the same zero cost.
+ * POST {gateway}/v1/images/generations as a Pi image model. Based on magpie's
+ * own Pi extension (internal/agent/pi_extension.ts).
  */
 
 import type {
@@ -18,7 +16,6 @@ import type {
 
 const NO_COST = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
 
-/** POST /v1/images/generations' answer, as this extension reads it. */
 interface ImageAnswer {
   text?: string;
   data?: { b64_json?: string; url?: string; mime_type?: string }[];
